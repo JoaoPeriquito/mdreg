@@ -56,7 +56,7 @@ from tqdm import tqdm
 
 
 def model_driven_registration(images, image_parameters, model, signal_model_parameters, elastix_model_parameters, precision = 1,  function = &#39;main&#39;, parallel = False, log = True): 
-    &#34;&#34;&#34; main function that performs the model driven registration.
+    &#34;&#34;&#34; Main function that performs the Model Driven Registration (MDR).
 
     Args:
     ----
@@ -487,7 +487,7 @@ the euclidean distance of difference between the old and new deformation field.<
 <span>def <span class="ident">model_driven_registration</span></span>(<span>images, image_parameters, model, signal_model_parameters, elastix_model_parameters, precision=1, function='main', parallel=False, log=True)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>main function that performs the model driven registration.</p>
+<div class="desc"><p>Main function that performs the Model Driven Registration (MDR).</p>
 <h2 id="args">Args:</h2>
 <pre><code>images (numpy.ndarray): unregistered 2D images (uint16) from the selected single MR slice with shape [x-dim, y-dim, total timeseries].     
 image_parameters (sitk tuple): distance between pixels (in mm) along each dimension.    
@@ -512,7 +512,7 @@ improvement (dataframe): maximum deformation per pixel calculated as the euclide
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def model_driven_registration(images, image_parameters, model, signal_model_parameters, elastix_model_parameters, precision = 1,  function = &#39;main&#39;, parallel = False, log = True): 
-    &#34;&#34;&#34; main function that performs the model driven registration.
+    &#34;&#34;&#34; Main function that performs the Model Driven Registration (MDR).
 
     Args:
     ----
