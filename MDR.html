@@ -246,7 +246,12 @@ def itkElastix_MDR_coregistration(target, source, elastix_model_parameters, imag
         elastixImageFilter.SetLogToConsole(False)
 
     ## update filter object (required)
-    elastixImageFilter.UpdateLargestPossibleRegion()
+    # It&#39;s not exactly clear why UpdateLargestPossibleRegion() works in some practical cases
+    # and in others it breaks. This try/except is a temporary solution/fix.
+    try:
+        elastixImageFilter.UpdateLargestPossibleRegion()
+    except:
+        pass
 
     ## RUN ELASTIX using ITK-Elastix filters
     coregistered = itk.GetArrayFromImage(elastixImageFilter.GetOutput()).flatten()
@@ -437,7 +442,12 @@ and returns ffd based co-registered target image and its corresponding deformati
         elastixImageFilter.SetLogToConsole(False)
 
     ## update filter object (required)
-    elastixImageFilter.UpdateLargestPossibleRegion()
+    # It&#39;s not exactly clear why UpdateLargestPossibleRegion() works in some practical cases
+    # and in others it breaks. This try/except is a temporary solution/fix.
+    try:
+        elastixImageFilter.UpdateLargestPossibleRegion()
+    except:
+        pass
 
     ## RUN ELASTIX using ITK-Elastix filters
     coregistered = itk.GetArrayFromImage(elastixImageFilter.GetOutput()).flatten()
