@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library API documentation</title>
-<meta name="description" content="The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an …" />
+<title>MDR_Library.models_signal.DWI_monoexponential_simple API documentation</title>
+<meta name="description" content="@author: Steven Sourbron
+DWI monoexponential model fit for the MDR Library
+2022" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,43 +21,133 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Package <code>MDR_Library</code></h1>
+<h1 class="title">Module <code>MDR_Library.models_signal.DWI_monoexponential_simple</code></h1>
 </header>
 <section id="section-intro">
-<p>The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an open-source, platform-independent, python based library for model based registration in quantitative renal MRI.</p>
-<p>The prototype MDR algorithm (Tagkalakis F, et al. Model-based motion correction outperforms a model-free method in quantitative renal MRI. Abstract-1383, ISMRM 2021) was initially developed using Elastix for co-registration and validated for renal T1-mapping, DTI and DCE against groupwise model-free registration (GMFR). The prototype MDR algorithm has been restructured and extended into the MDR_Library to provide a simple and intuitive application programming interface using ITK-Elastix.</p>
+<p>@author: Steven Sourbron
+DWI monoexponential model fit for the MDR Library<br>
+2022</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;
-The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an open-source, platform-independent, python based library for model based registration in quantitative renal MRI.
-
-The prototype MDR algorithm (Tagkalakis F, et al. Model-based motion correction outperforms a model-free method in quantitative renal MRI. Abstract-1383, ISMRM 2021) was initially developed using Elastix for co-registration and validated for renal T1-mapping, DTI and DCE against groupwise model-free registration (GMFR). The prototype MDR algorithm has been restructured and extended into the MDR_Library to provide a simple and intuitive application programming interface using ITK-Elastix.
+@author: Steven Sourbron 
+DWI monoexponential model fit for the MDR Library  
+2022 
 &#34;&#34;&#34;
-__pdoc__ = {&#34;setup&#34;: False, &#34;dbdicom&#34;: False}</code></pre>
+
+import numpy as np 
+from .exp_decay import main as exp_decay
+
+
+def main(images, bvalues):
+    &#34;&#34;&#34; main function that performs the DWI signal model-fit for input 2D image at multiple time-points. 
+ 
+    Args
+    ----
+    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].    
+    signal_model_parameters (list): list containing &#39;b-values&#39;, &#39;b-vectors&#39; and &#39;image_orientation_patient&#39; as list elements.    
+
+    Returns
+    -------
+    fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].   
+    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;ADC&#39; stored in a single nd-array with shape [2, x-dim*y-dim].       
+    &#34;&#34;&#34;
+    
+    initial_value = [0.9, 0.0025]
+    maxfev = 500
+
+    shape = np.shape(images)
+    par = np.empty((3, 2, shape[0]))
+    fit = np.empty(shape)
+    nb = len(bvalues)
+    
+    fit[:,:nb], par[0,:,:] = exp_decay(
+        images[:,:nb], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+    fit[:,nb:2*nb], par[1,:,:] = exp_decay(
+        images[:,nb:2*nb], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+    fit[:,2*nb:], par[2,:,:] = exp_decay(
+        images[:,2*nb:], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+   
+    return fit, np.mean(par, axis=0)</code></pre>
 </details>
 </section>
 <section>
-<h2 class="section-title" id="header-submodules">Sub-modules</h2>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt><code class="name"><a title="MDR_Library.MDR" href="MDR/index.html">MDR_Library.MDR</a></code></dt>
+<dt id="MDR_Library.models_signal.DWI_monoexponential_simple.main"><code class="name flex">
+<span>def <span class="ident">main</span></span>(<span>images, bvalues)</span>
+</code></dt>
 <dd>
-<div class="desc"></div>
-</dd>
-<dt><code class="name"><a title="MDR_Library.examples" href="examples.html">MDR_Library.examples</a></code></dt>
-<dd>
-<div class="desc"><p>MDR tutorial showing how to motion-correct DICOM T2*, T1, T2 (etc.) data …</p></div>
-</dd>
-<dt><code class="name"><a title="MDR_Library.models_signal" href="models_signal/index.html">MDR_Library.models_signal</a></code></dt>
-<dd>
-<div class="desc"></div>
+<div class="desc"><p>main function that performs the DWI signal model-fit for input 2D image at multiple time-points. </p>
+<h2 id="args">Args</h2>
+<p>images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].
+<br>
+signal_model_parameters (list): list containing 'b-values', 'b-vectors' and 'image_orientation_patient' as list elements.
+</p>
+<h2 id="returns">Returns</h2>
+<p>fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim<em>y-dim, total time-series]. <br>
+fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and 'ADC' stored in a single nd-array with shape [2, x-dim</em>y-dim].</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def main(images, bvalues):
+    &#34;&#34;&#34; main function that performs the DWI signal model-fit for input 2D image at multiple time-points. 
+ 
+    Args
+    ----
+    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].    
+    signal_model_parameters (list): list containing &#39;b-values&#39;, &#39;b-vectors&#39; and &#39;image_orientation_patient&#39; as list elements.    
+
+    Returns
+    -------
+    fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].   
+    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;ADC&#39; stored in a single nd-array with shape [2, x-dim*y-dim].       
+    &#34;&#34;&#34;
+    
+    initial_value = [0.9, 0.0025]
+    maxfev = 500
+
+    shape = np.shape(images)
+    par = np.empty((3, 2, shape[0]))
+    fit = np.empty(shape)
+    nb = len(bvalues)
+    
+    fit[:,:nb], par[0,:,:] = exp_decay(
+        images[:,:nb], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+    fit[:,nb:2*nb], par[1,:,:] = exp_decay(
+        images[:,nb:2*nb], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+    fit[:,2*nb:], par[2,:,:] = exp_decay(
+        images[:,2*nb:], bvalues, 
+        initial_value = initial_value, 
+        maxfev = maxfev, 
+    )
+   
+    return fit, np.mean(par, axis=0)</code></pre>
+</details>
 </dd>
 </dl>
-</section>
-<section>
-</section>
-<section>
 </section>
 <section>
 </section>
@@ -66,11 +158,14 @@ __pdoc__ = {&#34;setup&#34;: False, &#34;dbdicom&#34;: False}</code></pre>
 <ul></ul>
 </div>
 <ul id="index">
-<li><h3><a href="#header-submodules">Sub-modules</a></h3>
+<li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.MDR" href="MDR/index.html">MDR_Library.MDR</a></code></li>
-<li><code><a title="MDR_Library.examples" href="examples.html">MDR_Library.examples</a></code></li>
-<li><code><a title="MDR_Library.models_signal" href="models_signal/index.html">MDR_Library.models_signal</a></code></li>
+<li><code><a title="MDR_Library.models_signal" href="index.html">MDR_Library.models_signal</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="MDR_Library.models_signal.DWI_monoexponential_simple.main" href="#MDR_Library.models_signal.DWI_monoexponential_simple.main">main</a></code></li>
 </ul>
 </li>
 </ul>

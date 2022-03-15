@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library API documentation</title>
-<meta name="description" content="The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an …" />
+<title>MDR_Library.models_signal API documentation</title>
+<meta name="description" content="" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,37 +19,84 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Package <code>MDR_Library</code></h1>
+<h1 class="title">Namespace <code>MDR_Library.models_signal</code></h1>
 </header>
 <section id="section-intro">
-<p>The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an open-source, platform-independent, python based library for model based registration in quantitative renal MRI.</p>
-<p>The prototype MDR algorithm (Tagkalakis F, et al. Model-based motion correction outperforms a model-free method in quantitative renal MRI. Abstract-1383, ISMRM 2021) was initially developed using Elastix for co-registration and validated for renal T1-mapping, DTI and DCE against groupwise model-free registration (GMFR). The prototype MDR algorithm has been restructured and extended into the MDR_Library to provide a simple and intuitive application programming interface using ITK-Elastix.</p>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">&#34;&#34;&#34;
-The MDR library has been developed to simplify use, reduce workflow overhead, and allow generalisability by restructuring the MDR algorithm into an open-source, platform-independent, python based library for model based registration in quantitative renal MRI.
-
-The prototype MDR algorithm (Tagkalakis F, et al. Model-based motion correction outperforms a model-free method in quantitative renal MRI. Abstract-1383, ISMRM 2021) was initially developed using Elastix for co-registration and validated for renal T1-mapping, DTI and DCE against groupwise model-free registration (GMFR). The prototype MDR algorithm has been restructured and extended into the MDR_Library to provide a simple and intuitive application programming interface using ITK-Elastix.
-&#34;&#34;&#34;
-__pdoc__ = {&#34;setup&#34;: False, &#34;dbdicom&#34;: False}</code></pre>
-</details>
 </section>
 <section>
 <h2 class="section-title" id="header-submodules">Sub-modules</h2>
 <dl>
-<dt><code class="name"><a title="MDR_Library.MDR" href="MDR/index.html">MDR_Library.MDR</a></code></dt>
+<dt><code class="name"><a title="MDR_Library.models_signal.DTI" href="DTI.html">MDR_Library.models_signal.DTI</a></code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>@author: Kanishka Sharma - modified for MDR-Library from implementation of @Fotios Tagkalakis <br>
+iBEAt study DTI model fit for the MDR Library <br>
+2021</p></div>
 </dd>
-<dt><code class="name"><a title="MDR_Library.examples" href="examples.html">MDR_Library.examples</a></code></dt>
+<dt><code class="name"><a title="MDR_Library.models_signal.DWI_monoexponential" href="DWI_monoexponential.html">MDR_Library.models_signal.DWI_monoexponential</a></code></dt>
 <dd>
-<div class="desc"><p>MDR tutorial showing how to motion-correct DICOM T2*, T1, T2 (etc.) data …</p></div>
+<div class="desc"><p>@author: Kanishka Sharma<br>
+iBEAt study DWI monoexponential model fit for the MDR Library<br>
+2021</p></div>
 </dd>
-<dt><code class="name"><a title="MDR_Library.models_signal" href="models_signal/index.html">MDR_Library.models_signal</a></code></dt>
+<dt><code class="name"><a title="MDR_Library.models_signal.DWI_monoexponential_simple" href="DWI_monoexponential_simple.html">MDR_Library.models_signal.DWI_monoexponential_simple</a></code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>@author: Steven Sourbron
+DWI monoexponential model fit for the MDR Library<br>
+2022</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T1" href="T1.html">MDR_Library.models_signal.T1</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Kanishka Sharma<br>
+T1-MOLLI model fit<br>
+2021</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T1_simple" href="T1_simple.html">MDR_Library.models_signal.T1_simple</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Steven Sourbron
+T1-MOLLI model fit<br>
+2022</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T2" href="T2.html">MDR_Library.models_signal.T2</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Kanishka Sharma<br>
+T2-mapping signal model-fit<br>
+2021</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T2_simple" href="T2_simple.html">MDR_Library.models_signal.T2_simple</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Steven Sourbron<br>
+T2-mapping signal model-fit<br>
+2022</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T2star" href="T2star.html">MDR_Library.models_signal.T2star</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Kanishka Sharma<br>
+T2*-mapping signal model-fit<br>
+2021</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.T2star_simple" href="T2star_simple.html">MDR_Library.models_signal.T2star_simple</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Kanishka Sharma<br>
+T2*-mapping signal model-fit<br>
+2021</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.constant" href="constant.html">MDR_Library.models_signal.constant</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Steven Sourbron
+Fitting to a constant<br>
+2022</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.exp_decay" href="exp_decay.html">MDR_Library.models_signal.exp_decay</a></code></dt>
+<dd>
+<div class="desc"><p>@author: Steven Sourbron
+Pixel-by-pixel exponential decay fit
+2022</p></div>
+</dd>
+<dt><code class="name"><a title="MDR_Library.models_signal.two_compartment_filtration_model_DCE" href="two_compartment_filtration_model_DCE.html">MDR_Library.models_signal.two_compartment_filtration_model_DCE</a></code></dt>
+<dd>
+<div class="desc"><p>@authors: Kanishka Sharma, Fotios Tagkalakis, Steven Sourbron<br>
+DCE-MRI two-compartment filtration model fit<br>
+2021</p></div>
 </dd>
 </dl>
 </section>
@@ -66,11 +113,25 @@ __pdoc__ = {&#34;setup&#34;: False, &#34;dbdicom&#34;: False}</code></pre>
 <ul></ul>
 </div>
 <ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="MDR_Library" href="../index.html">MDR_Library</a></code></li>
+</ul>
+</li>
 <li><h3><a href="#header-submodules">Sub-modules</a></h3>
 <ul>
-<li><code><a title="MDR_Library.MDR" href="MDR/index.html">MDR_Library.MDR</a></code></li>
-<li><code><a title="MDR_Library.examples" href="examples.html">MDR_Library.examples</a></code></li>
-<li><code><a title="MDR_Library.models_signal" href="models_signal/index.html">MDR_Library.models_signal</a></code></li>
+<li><code><a title="MDR_Library.models_signal.DTI" href="DTI.html">MDR_Library.models_signal.DTI</a></code></li>
+<li><code><a title="MDR_Library.models_signal.DWI_monoexponential" href="DWI_monoexponential.html">MDR_Library.models_signal.DWI_monoexponential</a></code></li>
+<li><code><a title="MDR_Library.models_signal.DWI_monoexponential_simple" href="DWI_monoexponential_simple.html">MDR_Library.models_signal.DWI_monoexponential_simple</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T1" href="T1.html">MDR_Library.models_signal.T1</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T1_simple" href="T1_simple.html">MDR_Library.models_signal.T1_simple</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T2" href="T2.html">MDR_Library.models_signal.T2</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T2_simple" href="T2_simple.html">MDR_Library.models_signal.T2_simple</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T2star" href="T2star.html">MDR_Library.models_signal.T2star</a></code></li>
+<li><code><a title="MDR_Library.models_signal.T2star_simple" href="T2star_simple.html">MDR_Library.models_signal.T2star_simple</a></code></li>
+<li><code><a title="MDR_Library.models_signal.constant" href="constant.html">MDR_Library.models_signal.constant</a></code></li>
+<li><code><a title="MDR_Library.models_signal.exp_decay" href="exp_decay.html">MDR_Library.models_signal.exp_decay</a></code></li>
+<li><code><a title="MDR_Library.models_signal.two_compartment_filtration_model_DCE" href="two_compartment_filtration_model_DCE.html">MDR_Library.models_signal.two_compartment_filtration_model_DCE</a></code></li>
 </ul>
 </li>
 </ul>

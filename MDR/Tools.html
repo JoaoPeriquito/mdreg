@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR.Tools API documentation</title>
+<title>MDR_Library.MDR.Tools API documentation</title>
 <meta name="description" content="TOOLS FOR MODEL DRIVEN REGISTRATION (MDR)
 This file contains several functions that help and support the development of a motion correction analysis …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -20,7 +20,7 @@ This file contains several functions that help and support the development of a 
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR.Tools</code></h1>
+<h1 class="title">Module <code>MDR_Library.MDR.Tools</code></h1>
 </header>
 <section id="section-intro">
 <p>TOOLS FOR MODEL DRIVEN REGISTRATION (MDR)
@@ -47,81 +47,10 @@ MDR Library
 
 import os
 import numpy as np
-import importlib
 from PIL import Image
-import pydicom
-import SimpleITK as sitk
 import itk
-
-
-def read_DICOM_files(lstFilesDCM):
-    &#34;&#34;&#34; Reads input DICOM Files.
-
-    Args:
-    ----
-        lstFilesDCM (list): List containing the file paths of the DICOM Files.
-
-    Returns:
-    -------
-        files (list): List containing the pydicom datasets.
-        ArrayDicom (numpy.array): Image resulting from the stack of the DICOM files in lstFilesDCM.
-        filenameDCM (string): Last element of lstFilesDCM. Should be a file path to a DICOM file.
-    &#34;&#34;&#34;
-    files = []
-    RefDs = pydicom.dcmread(lstFilesDCM[0])
-    SeriesPixelDims = (int(RefDs.Rows), int(RefDs.Columns), len(lstFilesDCM))           
-    ArrayDicom = np.zeros(SeriesPixelDims, dtype=RefDs.pixel_array.dtype)
-
-    # read all dicoms and output dicom files
-    for filenameDCM in lstFilesDCM: 
-        files.append(pydicom.dcmread(filenameDCM))
-        ds = pydicom.dcmread(filenameDCM)
-        # write pixel data into numpy array
-        ArrayDicom[:, :, lstFilesDCM.index(filenameDCM)] = ds.pixel_array  
-
-    return files, ArrayDicom, filenameDCM
-
-
-def get_sitk_image_details_from_DICOM(filenameDCM):
-    &#34;&#34;&#34; Reads and returns image spacing of the input DICOM File.
-
-    Args:
-    ----
-        filenameDCM (string): File path to a DICOM File.
-
-    Returns:
-    -------
-        spacing (float): Float value describing the space between pixels in the given image.
-    &#34;&#34;&#34;
-    reader = sitk.ImageSeriesReader()
-    dicom_names = reader.GetGDCMSeriesFileNames(filenameDCM)
-    reader.SetFileNames(dicom_names)
-    image = reader.Execute()
-    spacing = image.GetSpacing() 
-    return spacing
-
-
-def sort_all_slice_files_acquisition_time(files):
-    &#34;&#34;&#34; Sort the DICOM files based on acquisition time.
-
-    Args:
-    ----
-        files (list): List containing the pydicom datasets of the DICOM Files.
-
-    Returns:
-    -------
-        slice_sorted_acq_time (list): List containing the file paths of the DICOM Files sorted by acquisition time.
-    &#34;&#34;&#34;
-    slice_sorted_acq_time = []
-    skipcount = 0
-    for f in files: 
-        if hasattr(f, &#39;AcquisitionTime&#39;):
-            slice_sorted_acq_time.append(f)
-        else:
-            skipcount = skipcount + 1
-    print(&#34;skipped, no AcquisitionTime: {}&#34;.format(skipcount))
-
-    return sorted(slice_sorted_acq_time, key=lambda s: s.AcquisitionTime) 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 
 def read_elastix_model_parameters(Elastix_Parameter_file_PATH, *argv):
@@ -145,6 +74,38 @@ def read_elastix_model_parameters(Elastix_Parameter_file_PATH, *argv):
     for lstParameters in argv:
         elastix_model_parameters.SetParameter(str(lstParameters[0]), str(lstParameters[1]))
     return elastix_model_parameters
+   
+
+def export_results(MDR_output=(), path=&#39;&#39;, model=&#39;&#39;, pars=[], xy=()):
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    defx = np.squeeze(MDR_output[2][:,:,0,:])
+    defy = np.squeeze(MDR_output[2][:,:,1,:])
+
+    export_animation(MDR_output[0], os.path.join(path, model), &#39;coregistered&#39;)
+    export_animation(MDR_output[1], os.path.join(path, model), &#39;modelfit&#39;)
+    export_animation(defx, os.path.join(path, model), &#39;deformation_field_x&#39;)
+    export_animation(defx, os.path.join(path, model), &#39;deformation_field_x&#39;)
+    export_animation(np.sqrt(defx**2 + defy**2), os.path.join(path, model), &#39;deformation_field&#39;)
+    for i in range(len(pars)):
+    #    export_maps(MDR_output[3][i,:], os.path.join(path, model, pars[i]), xy)
+        export_imgs(MDR_output[3][i,:], os.path.join(path, model, pars[i]), xy)
+    MDR_output[4].to_csv(os.path.join(path, model, &#39;largest_deformations.csv&#39;))
+
+
+def export_animation(arr, path, filename):
+
+    if not os.path.exists(path): os.mkdir(path)
+    file = os.path.join(path, filename + &#39;.gif&#39;)
+    fig = plt.figure()
+    im = plt.imshow(np.squeeze(arr[:,:,0]), animated=True)
+    def updatefig(i):
+        im.set_array(np.squeeze(arr[:,:,i]))
+    anim = animation.FuncAnimation(fig, updatefig, interval=50, frames=arr.shape[2])
+    anim.save(file)
+    #plt.show()
 
 
 def export_images(MDR_individual_output, folder):
@@ -161,7 +122,6 @@ def export_images(MDR_individual_output, folder):
         im = Image.fromarray(MDR_individual_output[:,:,i])
         im.save(folder + str(i) + &#34;.tiff&#34;)
 
-
 def export_maps(MDR_individual_output, folder, shape):
     &#34;&#34;&#34; Save MDR results to given folder. Fitted Parameters to output folder.
 
@@ -171,10 +131,23 @@ def export_maps(MDR_individual_output, folder, shape):
         folder (string): Path to the folder that will host the results/output of this method.
         shape (list): Shape of the output array to which MDR_individual_output will be reshaped
     &#34;&#34;&#34;
-    if not os.path.exists(os.path.dirname(folder)): os.makedirs(os.path.dirname(folder))
+    if not os.path.exists(os.path.dirname(folder)): 
+        os.makedirs(os.path.dirname(folder))
     array = np.reshape(MDR_individual_output, [shape[0],shape[1]]) 
     Img = Image.fromarray(array)
-    Img.save(folder + &#34;.tiff&#34;)</code></pre>
+    Img.save(folder + &#34;.tiff&#34;)
+
+def export_imgs(array, folder, shape):
+
+    if not os.path.exists(os.path.dirname(folder)): 
+        os.makedirs(os.path.dirname(folder))
+    array = np.reshape(array, [shape[0],shape[1]])
+    plt.imshow(array)
+    #plt.clim(int(minValue), int(maxValue))
+    cBar = plt.colorbar()
+    cBar.minorticks_on()
+    plt.savefig(fname=folder + &#39;.png&#39;)
+    plt.close()</code></pre>
 </details>
 </section>
 <section>
@@ -184,7 +157,28 @@ def export_maps(MDR_individual_output, folder, shape):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MDR.Tools.export_images"><code class="name flex">
+<dt id="MDR_Library.MDR.Tools.export_animation"><code class="name flex">
+<span>def <span class="ident">export_animation</span></span>(<span>arr, path, filename)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def export_animation(arr, path, filename):
+
+    if not os.path.exists(path): os.mkdir(path)
+    file = os.path.join(path, filename + &#39;.gif&#39;)
+    fig = plt.figure()
+    im = plt.imshow(np.squeeze(arr[:,:,0]), animated=True)
+    def updatefig(i):
+        im.set_array(np.squeeze(arr[:,:,i]))
+    anim = animation.FuncAnimation(fig, updatefig, interval=50, frames=arr.shape[2])
+    anim.save(file)</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.MDR.Tools.export_images"><code class="name flex">
 <span>def <span class="ident">export_images</span></span>(<span>MDR_individual_output, folder)</span>
 </code></dt>
 <dd>
@@ -212,7 +206,29 @@ folder (string): Path to the folder that will host the results/output of this me
         im.save(folder + str(i) + &#34;.tiff&#34;)</code></pre>
 </details>
 </dd>
-<dt id="MDR.Tools.export_maps"><code class="name flex">
+<dt id="MDR_Library.MDR.Tools.export_imgs"><code class="name flex">
+<span>def <span class="ident">export_imgs</span></span>(<span>array, folder, shape)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def export_imgs(array, folder, shape):
+
+    if not os.path.exists(os.path.dirname(folder)): 
+        os.makedirs(os.path.dirname(folder))
+    array = np.reshape(array, [shape[0],shape[1]])
+    plt.imshow(array)
+    #plt.clim(int(minValue), int(maxValue))
+    cBar = plt.colorbar()
+    cBar.minorticks_on()
+    plt.savefig(fname=folder + &#39;.png&#39;)
+    plt.close()</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.MDR.Tools.export_maps"><code class="name flex">
 <span>def <span class="ident">export_maps</span></span>(<span>MDR_individual_output, folder, shape)</span>
 </code></dt>
 <dd>
@@ -235,92 +251,42 @@ shape (list): Shape of the output array to which MDR_individual_output will be r
         folder (string): Path to the folder that will host the results/output of this method.
         shape (list): Shape of the output array to which MDR_individual_output will be reshaped
     &#34;&#34;&#34;
-    if not os.path.exists(os.path.dirname(folder)): os.makedirs(os.path.dirname(folder))
+    if not os.path.exists(os.path.dirname(folder)): 
+        os.makedirs(os.path.dirname(folder))
     array = np.reshape(MDR_individual_output, [shape[0],shape[1]]) 
     Img = Image.fromarray(array)
     Img.save(folder + &#34;.tiff&#34;)</code></pre>
 </details>
 </dd>
-<dt id="MDR.Tools.get_sitk_image_details_from_DICOM"><code class="name flex">
-<span>def <span class="ident">get_sitk_image_details_from_DICOM</span></span>(<span>filenameDCM)</span>
+<dt id="MDR_Library.MDR.Tools.export_results"><code class="name flex">
+<span>def <span class="ident">export_results</span></span>(<span>MDR_output=(), path='', model='', pars=[], xy=())</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Reads and returns image spacing of the input DICOM File.</p>
-<h2 id="args">Args:</h2>
-<pre><code>filenameDCM (string): File path to a DICOM File.
-</code></pre>
-<h2 id="returns">Returns:</h2>
-<pre><code>spacing (float): Float value describing the space between pixels in the given image.
-</code></pre></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def get_sitk_image_details_from_DICOM(filenameDCM):
-    &#34;&#34;&#34; Reads and returns image spacing of the input DICOM File.
+<pre><code class="python">def export_results(MDR_output=(), path=&#39;&#39;, model=&#39;&#39;, pars=[], xy=()):
 
-    Args:
-    ----
-        filenameDCM (string): File path to a DICOM File.
+    if not os.path.exists(path):
+        os.mkdir(path)
 
-    Returns:
-    -------
-        spacing (float): Float value describing the space between pixels in the given image.
-    &#34;&#34;&#34;
-    reader = sitk.ImageSeriesReader()
-    dicom_names = reader.GetGDCMSeriesFileNames(filenameDCM)
-    reader.SetFileNames(dicom_names)
-    image = reader.Execute()
-    spacing = image.GetSpacing() 
-    return spacing</code></pre>
+    defx = np.squeeze(MDR_output[2][:,:,0,:])
+    defy = np.squeeze(MDR_output[2][:,:,1,:])
+
+    export_animation(MDR_output[0], os.path.join(path, model), &#39;coregistered&#39;)
+    export_animation(MDR_output[1], os.path.join(path, model), &#39;modelfit&#39;)
+    export_animation(defx, os.path.join(path, model), &#39;deformation_field_x&#39;)
+    export_animation(defx, os.path.join(path, model), &#39;deformation_field_x&#39;)
+    export_animation(np.sqrt(defx**2 + defy**2), os.path.join(path, model), &#39;deformation_field&#39;)
+    for i in range(len(pars)):
+    #    export_maps(MDR_output[3][i,:], os.path.join(path, model, pars[i]), xy)
+        export_imgs(MDR_output[3][i,:], os.path.join(path, model, pars[i]), xy)
+    MDR_output[4].to_csv(os.path.join(path, model, &#39;largest_deformations.csv&#39;))</code></pre>
 </details>
 </dd>
-<dt id="MDR.Tools.read_DICOM_files"><code class="name flex">
-<span>def <span class="ident">read_DICOM_files</span></span>(<span>lstFilesDCM)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Reads input DICOM Files.</p>
-<h2 id="args">Args:</h2>
-<pre><code>lstFilesDCM (list): List containing the file paths of the DICOM Files.
-</code></pre>
-<h2 id="returns">Returns:</h2>
-<pre><code>files (list): List containing the pydicom datasets.
-ArrayDicom (numpy.array): Image resulting from the stack of the DICOM files in lstFilesDCM.
-filenameDCM (string): Last element of lstFilesDCM. Should be a file path to a DICOM file.
-</code></pre></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def read_DICOM_files(lstFilesDCM):
-    &#34;&#34;&#34; Reads input DICOM Files.
-
-    Args:
-    ----
-        lstFilesDCM (list): List containing the file paths of the DICOM Files.
-
-    Returns:
-    -------
-        files (list): List containing the pydicom datasets.
-        ArrayDicom (numpy.array): Image resulting from the stack of the DICOM files in lstFilesDCM.
-        filenameDCM (string): Last element of lstFilesDCM. Should be a file path to a DICOM file.
-    &#34;&#34;&#34;
-    files = []
-    RefDs = pydicom.dcmread(lstFilesDCM[0])
-    SeriesPixelDims = (int(RefDs.Rows), int(RefDs.Columns), len(lstFilesDCM))           
-    ArrayDicom = np.zeros(SeriesPixelDims, dtype=RefDs.pixel_array.dtype)
-
-    # read all dicoms and output dicom files
-    for filenameDCM in lstFilesDCM: 
-        files.append(pydicom.dcmread(filenameDCM))
-        ds = pydicom.dcmread(filenameDCM)
-        # write pixel data into numpy array
-        ArrayDicom[:, :, lstFilesDCM.index(filenameDCM)] = ds.pixel_array  
-
-    return files, ArrayDicom, filenameDCM</code></pre>
-</details>
-</dd>
-<dt id="MDR.Tools.read_elastix_model_parameters"><code class="name flex">
+<dt id="MDR_Library.MDR.Tools.read_elastix_model_parameters"><code class="name flex">
 <span>def <span class="ident">read_elastix_model_parameters</span></span>(<span>Elastix_Parameter_file_PATH, *argv)</span>
 </code></dt>
 <dd>
@@ -361,44 +327,6 @@ filenameDCM (string): Last element of lstFilesDCM. Should be a file path to a DI
     return elastix_model_parameters</code></pre>
 </details>
 </dd>
-<dt id="MDR.Tools.sort_all_slice_files_acquisition_time"><code class="name flex">
-<span>def <span class="ident">sort_all_slice_files_acquisition_time</span></span>(<span>files)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Sort the DICOM files based on acquisition time.</p>
-<h2 id="args">Args:</h2>
-<pre><code>files (list): List containing the pydicom datasets of the DICOM Files.
-</code></pre>
-<h2 id="returns">Returns:</h2>
-<pre><code>slice_sorted_acq_time (list): List containing the file paths of the DICOM Files sorted by acquisition time.
-</code></pre></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def sort_all_slice_files_acquisition_time(files):
-    &#34;&#34;&#34; Sort the DICOM files based on acquisition time.
-
-    Args:
-    ----
-        files (list): List containing the pydicom datasets of the DICOM Files.
-
-    Returns:
-    -------
-        slice_sorted_acq_time (list): List containing the file paths of the DICOM Files sorted by acquisition time.
-    &#34;&#34;&#34;
-    slice_sorted_acq_time = []
-    skipcount = 0
-    for f in files: 
-        if hasattr(f, &#39;AcquisitionTime&#39;):
-            slice_sorted_acq_time.append(f)
-        else:
-            skipcount = skipcount + 1
-    print(&#34;skipped, no AcquisitionTime: {}&#34;.format(skipcount))
-
-    return sorted(slice_sorted_acq_time, key=lambda s: s.AcquisitionTime) </code></pre>
-</details>
-</dd>
 </dl>
 </section>
 <section>
@@ -412,17 +340,17 @@ filenameDCM (string): Last element of lstFilesDCM. Should be a file path to a DI
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR" href="index.html">MDR</a></code></li>
+<li><code><a title="MDR_Library.MDR" href="index.html">MDR_Library.MDR</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MDR.Tools.export_images" href="#MDR.Tools.export_images">export_images</a></code></li>
-<li><code><a title="MDR.Tools.export_maps" href="#MDR.Tools.export_maps">export_maps</a></code></li>
-<li><code><a title="MDR.Tools.get_sitk_image_details_from_DICOM" href="#MDR.Tools.get_sitk_image_details_from_DICOM">get_sitk_image_details_from_DICOM</a></code></li>
-<li><code><a title="MDR.Tools.read_DICOM_files" href="#MDR.Tools.read_DICOM_files">read_DICOM_files</a></code></li>
-<li><code><a title="MDR.Tools.read_elastix_model_parameters" href="#MDR.Tools.read_elastix_model_parameters">read_elastix_model_parameters</a></code></li>
-<li><code><a title="MDR.Tools.sort_all_slice_files_acquisition_time" href="#MDR.Tools.sort_all_slice_files_acquisition_time">sort_all_slice_files_acquisition_time</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.export_animation" href="#MDR_Library.MDR.Tools.export_animation">export_animation</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.export_images" href="#MDR_Library.MDR.Tools.export_images">export_images</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.export_imgs" href="#MDR_Library.MDR.Tools.export_imgs">export_imgs</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.export_maps" href="#MDR_Library.MDR.Tools.export_maps">export_maps</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.export_results" href="#MDR_Library.MDR.Tools.export_results">export_results</a></code></li>
+<li><code><a title="MDR_Library.MDR.Tools.read_elastix_model_parameters" href="#MDR_Library.MDR.Tools.read_elastix_model_parameters">read_elastix_model_parameters</a></code></li>
 </ul>
 </li>
 </ul>
