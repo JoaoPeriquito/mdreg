@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library.models_signal.exp_decay API documentation</title>
+<title>MDR_Library.mdreg.models.exp_decay API documentation</title>
 <meta name="description" content="@author: Steven Sourbron
 Pixel-by-pixel exponential decay fit
 2022" />
@@ -21,7 +21,7 @@ Pixel-by-pixel exponential decay fit
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR_Library.models_signal.exp_decay</code></h1>
+<h1 class="title">Module <code>MDR_Library.mdreg.models.exp_decay</code></h1>
 </header>
 <section id="section-intro">
 <p>@author: Steven Sourbron
@@ -38,9 +38,17 @@ Pixel-by-pixel exponential decay fit
 Pixel-by-pixel exponential decay fit 
 2022
 &#34;&#34;&#34;
-
+import tqdm
 import numpy as np
 from scipy.optimize import curve_fit
+
+def pars():
+    return [&#39;S0&#39;, &#39;R&#39;]
+
+def bounds():
+    lower = [0,0]
+    upper = [np.inf, np.inf]
+    return lower, upper
 
 
 def func(t, S, R):
@@ -80,21 +88,25 @@ def main(images, t,
 
     t = np.array(t)
     shape = np.shape(images)
-    par = np.empty((2, shape[0])) # pixels should be first for consistency
+    par = np.empty((shape[0], 2)) 
     fit = np.empty(shape)
 
-    for x in range(shape[0]):
+    for x in tqdm(range(shape[0]), dec=&#39;Fitting exponential decay&#39;):
 
         signal = images[x,:]
-        par[:,x], _ = curve_fit(func, 
-            xdata = t, 
-            ydata = signal, 
-            p0 = [np.max(signal)*initial_value[0], initial_value[1]], 
-            bounds = (lower_bounds, upper_bounds), 
-            method = method, 
-            maxfev = maxfev, 
-        )
-        fit[x,:] = func(t, par[0,x], par[1,x])
+        p0 = [np.max(signal)*initial_value[0], initial_value[1]]
+        try:
+            par[x,:], _ = curve_fit(func, 
+                xdata = t, 
+                ydata = signal, 
+                p0 = p0, 
+                bounds = (lower_bounds, upper_bounds), 
+                method = method, 
+                maxfev = maxfev, 
+            )
+        except RuntimeError:
+            par[x,:] = p0
+        fit[x,:] = func(t, par[x,0], par[x,1])
   
     return fit, par</code></pre>
 </details>
@@ -106,7 +118,22 @@ def main(images, t,
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MDR_Library.models_signal.exp_decay.func"><code class="name flex">
+<dt id="MDR_Library.mdreg.models.exp_decay.bounds"><code class="name flex">
+<span>def <span class="ident">bounds</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def bounds():
+    lower = [0,0]
+    upper = [np.inf, np.inf]
+    return lower, upper</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.mdreg.models.exp_decay.func"><code class="name flex">
 <span>def <span class="ident">func</span></span>(<span>t, S, R)</span>
 </code></dt>
 <dd>
@@ -136,7 +163,7 @@ def main(images, t,
     return S*np.exp(-t*R)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.models_signal.exp_decay.main"><code class="name flex">
+<dt id="MDR_Library.mdreg.models.exp_decay.main"><code class="name flex">
 <span>def <span class="ident">main</span></span>(<span>images, t, lower_bounds=[0, 0], upper_bounds=[inf, inf], initial_value=[1, 1], method='trf', maxfev=500)</span>
 </code></dt>
 <dd>
@@ -174,23 +201,40 @@ par (numpy.ndarray): output signal model fit parameters 'S' and 'R' stored in a 
 
     t = np.array(t)
     shape = np.shape(images)
-    par = np.empty((2, shape[0])) # pixels should be first for consistency
+    par = np.empty((shape[0], 2)) 
     fit = np.empty(shape)
 
-    for x in range(shape[0]):
+    for x in tqdm(range(shape[0]), dec=&#39;Fitting exponential decay&#39;):
 
         signal = images[x,:]
-        par[:,x], _ = curve_fit(func, 
-            xdata = t, 
-            ydata = signal, 
-            p0 = [np.max(signal)*initial_value[0], initial_value[1]], 
-            bounds = (lower_bounds, upper_bounds), 
-            method = method, 
-            maxfev = maxfev, 
-        )
-        fit[x,:] = func(t, par[0,x], par[1,x])
+        p0 = [np.max(signal)*initial_value[0], initial_value[1]]
+        try:
+            par[x,:], _ = curve_fit(func, 
+                xdata = t, 
+                ydata = signal, 
+                p0 = p0, 
+                bounds = (lower_bounds, upper_bounds), 
+                method = method, 
+                maxfev = maxfev, 
+            )
+        except RuntimeError:
+            par[x,:] = p0
+        fit[x,:] = func(t, par[x,0], par[x,1])
   
     return fit, par</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.mdreg.models.exp_decay.pars"><code class="name flex">
+<span>def <span class="ident">pars</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def pars():
+    return [&#39;S0&#39;, &#39;R&#39;]</code></pre>
 </details>
 </dd>
 </dl>
@@ -206,13 +250,15 @@ par (numpy.ndarray): output signal model fit parameters 'S' and 'R' stored in a 
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.models_signal" href="index.html">MDR_Library.models_signal</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models" href="index.html">MDR_Library.mdreg.models</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MDR_Library.models_signal.exp_decay.func" href="#MDR_Library.models_signal.exp_decay.func">func</a></code></li>
-<li><code><a title="MDR_Library.models_signal.exp_decay.main" href="#MDR_Library.models_signal.exp_decay.main">main</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.exp_decay.bounds" href="#MDR_Library.mdreg.models.exp_decay.bounds">bounds</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.exp_decay.func" href="#MDR_Library.mdreg.models.exp_decay.func">func</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.exp_decay.main" href="#MDR_Library.mdreg.models.exp_decay.main">main</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.exp_decay.pars" href="#MDR_Library.mdreg.models.exp_decay.pars">pars</a></code></li>
 </ul>
 </li>
 </ul>

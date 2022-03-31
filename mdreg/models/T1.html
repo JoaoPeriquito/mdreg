@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library.models_signal.T2star API documentation</title>
+<title>MDR_Library.mdreg.models.T1 API documentation</title>
 <meta name="description" content="@author: Kanishka Sharma
-T2*-mapping signal model-fit
-2021" />
+T1-mapping signal model-fit
+2021
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP.
+…" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -21,12 +23,15 @@ T2*-mapping signal model-fit
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR_Library.models_signal.T2star</code></h1>
+<h1 class="title">Module <code>MDR_Library.mdreg.models.T1</code></h1>
 </header>
 <section id="section-intro">
 <p>@author: Kanishka Sharma<br>
-T2*-mapping signal model-fit<br>
-2021</p>
+T1-mapping signal model-fit<br>
+2021<br>
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP.
+Modified Look-Locker inversion recovery (MOLLI) for high-resolution T1 mapping of the heart.
+Magn Reson Med. 2004 Jul;52(1):141-6. doi: 10.1002/mrm.20110. PMID: 15236377.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -35,8 +40,11 @@ T2*-mapping signal model-fit<br>
 # -*- coding: utf-8 -*-
 &#34;&#34;&#34;
 @author: Kanishka Sharma  
-T2*-mapping signal model-fit  
+T1-mapping signal model-fit  
 2021  
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP. 
+Modified Look-Locker inversion recovery (MOLLI) for high-resolution T1 mapping of the heart. 
+Magn Reson Med. 2004 Jul;52(1):141-6. doi: 10.1002/mrm.20110. PMID: 15236377. 
 &#34;&#34;&#34;
 
 import os
@@ -44,23 +52,30 @@ import numpy as np
 from scipy.optimize import curve_fit
 import multiprocessing
 
-def exp_func(TE,S0,T2star):
-    &#34;&#34;&#34; mono-exponential decay function to perform T2*-fitting.  
+def pars():
+    return [&#39;A&#39;, &#39;B&#39;, &#39;T1app&#39;]
+
+def bounds():
+    lower = [0,0,0]
+    upper = [np.inf, np.inf, 3000]
+    return lower, upper
+
+def func(x, a, b, T1):
+    &#34;&#34;&#34; exponential function for T1-fitting.
 
     Args
     ----
-    TE (numpy.ndarray): Echo times (TE) in the T2*-mapping sequence as input (independent variable) for the signal model fit.  
-
+    x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.    
+    
     Returns
     -------
-    S0, T2star(numpy.ndarray): output signal model fit parameters.  
-
+    a, b, T1 (numpy.ndarray): signal model fitted parameters.  
     &#34;&#34;&#34;
-  
-    return S0*np.exp(-TE/T2star)
+
+    return np.abs(a - b * np.exp(-x/T1)) 
 
 
-def T2star_fitting_pixel(parallel_arguments):
+def fit_pixel(args):
     &#34;&#34;&#34; Runs the curve fit function for 1 pixel.
 
     Args
@@ -74,18 +89,25 @@ def T2star_fitting_pixel(parallel_arguments):
     S0x (numpy.ndarray): fitted parameter &#39;S0&#39; with shape [1].    
     T2x (numpy.ndarray): fitted parameter &#39;T2&#39; (ms) with shape [1].  
     &#34;&#34;&#34;
-    pixel_index, images_to_be_fitted, initial_guess, lb, ub, echo_times = parallel_arguments
-    #popt, pcov = curve_fit(exp_func, xdata = echo_times, ydata = images_to_be_fitted[pixel_index,:], p0=initial_guess, bounds=(lb,ub), method=&#39;trf&#39;)
-    popt, pcov = curve_fit(exp_func, xdata = echo_times, ydata = images_to_be_fitted[pixel_index,:], p0=initial_guess, bounds=(lb,ub), method=&#39;trf&#39;, maxfev=1000000)
-    S0x =  popt[0] 
-    T2_star_x =  popt[1]
-    fitx = []
-    for i in range(len(echo_times)):#time-series (t)
-        fitx.append(exp_func(echo_times[i], S0x, T2_star_x))
-    return fitx, S0x, T2_star_x
+
+    p0 = [687.0, 1329.0, 1500.0]
+
+    try:
+        par, _ = curve_fit(func, 
+            xdata = args[0], 
+            ydata = args[1], 
+            p0 = p0, 
+            bounds = ([0, 0, 0], [np.inf, np.inf, 2000]),  
+            method = &#39;trf&#39;, 
+            maxfev = 500,
+        )
+    except RuntimeError: # optimum not found
+        par = p0
+
+    return func(args[0], par[0], par[1], par[2]), par
 
 
-def T2star_fitting(images_to_be_fitted, echo_times):
+def main(images, TE):
     &#34;&#34;&#34; Calls T2star_fitting_pixel which contains the curve_fit function and return the fit and fitted params S0 and T2*.
 
     Args
@@ -100,51 +122,18 @@ def T2star_fitting(images_to_be_fitted, echo_times):
     T2_star (numpy.ndarray): fitted parameter &#39;T2_star&#39; (ms) with shape [x-dim*y-dim].  
 
     &#34;&#34;&#34;
-    lb = [0,10]
-    ub = [np.inf,100]
-    initial_guess = [np.max(images_to_be_fitted),50] 
-    shape = np.shape(images_to_be_fitted)
-    S0 = np.empty(shape[0]) 
-    T2_star = np.empty(shape[0])
+    TE = np.array(TE)
+    shape = np.shape(images)
     fit = np.empty(shape)
+    par = np.empty((shape[0], 3))
 
-    # Run T2star_fitting_pixel (which contains &#34;curve_fit&#34;) in parallel processing
     pool = multiprocessing.Pool(processes=os.cpu_count()-1)
-    arguments = [(x, images_to_be_fitted, initial_guess, lb, ub, echo_times) for x in range(shape[0])] #pixels (x-dim*y-dim)
-    results = pool.map(T2star_fitting_pixel, arguments)
-    for i, result in enumerate(results):
-        S0[i] = result[1]
-        T2_star[i] = result[2]
-        fit[i,:] = result[0]
-  
-    return fit, S0, T2_star
-
-
-def main(images_to_be_fitted, signal_model_parameters):
-    &#34;&#34;&#34; main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).
-
-    Args
-    ----
-    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].  
-    signal_model_parameters (list): list containing TE times as list elements.  
-
-    Returns
-    -------
-    fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim*y-dim, total time-series].  
-    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;T2star&#39; stored in a single nd-array with shape [2, x-dim*y-dim].      
-    &#34;&#34;&#34;
-    
-    echo_times = signal_model_parameters
-    results = T2star_fitting(images_to_be_fitted, echo_times)
-
-    fit = results[0]
-    S0 = results[1]
-    T2star = results[2]
-
-    fitted_parameters_tuple = (S0, T2star) 
-    fitted_parameters = np.vstack(fitted_parameters_tuple) 
-
-    return fit, fitted_parameters</code></pre>
+    args = [(TE, images[x,:]) for x in range(shape[0])] 
+    results = pool.map(fit_pixel, args)
+    for x, result in enumerate(results):
+        fit[x,:], par[x,:] = result
+        
+    return fit, par</code></pre>
 </details>
 </section>
 <section>
@@ -154,8 +143,104 @@ def main(images_to_be_fitted, signal_model_parameters):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MDR_Library.models_signal.T2star.T2star_fitting"><code class="name flex">
-<span>def <span class="ident">T2star_fitting</span></span>(<span>images_to_be_fitted, echo_times)</span>
+<dt id="MDR_Library.mdreg.models.T1.bounds"><code class="name flex">
+<span>def <span class="ident">bounds</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def bounds():
+    lower = [0,0,0]
+    upper = [np.inf, np.inf, 3000]
+    return lower, upper</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.mdreg.models.T1.fit_pixel"><code class="name flex">
+<span>def <span class="ident">fit_pixel</span></span>(<span>args)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Runs the curve fit function for 1 pixel.</p>
+<h2 id="args">Args</h2>
+<p>parallel_arguments (tuple): tuple containing the input arguments for curve_fit, such as the input images, the T2-preparation times and more for the signal model fit.
+This tuple format is required for the success of the parallelisation process and consequent speed-up of the fitting.</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>fitx (numpy.ndarray): signal model fit at all time-series with shape [total time-series].</code></dt>
+<dd>&nbsp;</dd>
+<dt><code>S0x (numpy.ndarray): fitted parameter 'S0' with shape [1].</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<p>T2x (numpy.ndarray): fitted parameter 'T2' (ms) with shape [1].</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def fit_pixel(args):
+    &#34;&#34;&#34; Runs the curve fit function for 1 pixel.
+
+    Args
+    ----
+    parallel_arguments (tuple): tuple containing the input arguments for curve_fit, such as the input images, the T2-preparation times and more for the signal model fit.
+                                This tuple format is required for the success of the parallelisation process and consequent speed-up of the fitting.
+
+    Returns
+    -------
+    fitx (numpy.ndarray): signal model fit at all time-series with shape [total time-series].    
+    S0x (numpy.ndarray): fitted parameter &#39;S0&#39; with shape [1].    
+    T2x (numpy.ndarray): fitted parameter &#39;T2&#39; (ms) with shape [1].  
+    &#34;&#34;&#34;
+
+    p0 = [687.0, 1329.0, 1500.0]
+
+    try:
+        par, _ = curve_fit(func, 
+            xdata = args[0], 
+            ydata = args[1], 
+            p0 = p0, 
+            bounds = ([0, 0, 0], [np.inf, np.inf, 2000]),  
+            method = &#39;trf&#39;, 
+            maxfev = 500,
+        )
+    except RuntimeError: # optimum not found
+        par = p0
+
+    return func(args[0], par[0], par[1], par[2]), par</code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.mdreg.models.T1.func"><code class="name flex">
+<span>def <span class="ident">func</span></span>(<span>x, a, b, T1)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>exponential function for T1-fitting.</p>
+<h2 id="args">Args</h2>
+<p>x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.
+</p>
+<h2 id="returns">Returns</h2>
+<p>a, b, T1 (numpy.ndarray): signal model fitted parameters.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def func(x, a, b, T1):
+    &#34;&#34;&#34; exponential function for T1-fitting.
+
+    Args
+    ----
+    x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.    
+    
+    Returns
+    -------
+    a, b, T1 (numpy.ndarray): signal model fitted parameters.  
+    &#34;&#34;&#34;
+
+    return np.abs(a - b * np.exp(-x/T1)) </code></pre>
+</details>
+</dd>
+<dt id="MDR_Library.mdreg.models.T1.main"><code class="name flex">
+<span>def <span class="ident">main</span></span>(<span>images, TE)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Calls T2star_fitting_pixel which contains the curve_fit function and return the fit and fitted params S0 and T2*.</p>
@@ -175,7 +260,7 @@ T2_star (numpy.ndarray): fitted parameter 'T2_star' (ms) with shape [x-dim*y-dim
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def T2star_fitting(images_to_be_fitted, echo_times):
+<pre><code class="python">def main(images, TE):
     &#34;&#34;&#34; Calls T2star_fitting_pixel which contains the curve_fit function and return the fit and fitted params S0 and T2*.
 
     Args
@@ -190,143 +275,31 @@ T2_star (numpy.ndarray): fitted parameter 'T2_star' (ms) with shape [x-dim*y-dim
     T2_star (numpy.ndarray): fitted parameter &#39;T2_star&#39; (ms) with shape [x-dim*y-dim].  
 
     &#34;&#34;&#34;
-    lb = [0,10]
-    ub = [np.inf,100]
-    initial_guess = [np.max(images_to_be_fitted),50] 
-    shape = np.shape(images_to_be_fitted)
-    S0 = np.empty(shape[0]) 
-    T2_star = np.empty(shape[0])
+    TE = np.array(TE)
+    shape = np.shape(images)
     fit = np.empty(shape)
+    par = np.empty((shape[0], 3))
 
-    # Run T2star_fitting_pixel (which contains &#34;curve_fit&#34;) in parallel processing
     pool = multiprocessing.Pool(processes=os.cpu_count()-1)
-    arguments = [(x, images_to_be_fitted, initial_guess, lb, ub, echo_times) for x in range(shape[0])] #pixels (x-dim*y-dim)
-    results = pool.map(T2star_fitting_pixel, arguments)
-    for i, result in enumerate(results):
-        S0[i] = result[1]
-        T2_star[i] = result[2]
-        fit[i,:] = result[0]
-  
-    return fit, S0, T2_star</code></pre>
+    args = [(TE, images[x,:]) for x in range(shape[0])] 
+    results = pool.map(fit_pixel, args)
+    for x, result in enumerate(results):
+        fit[x,:], par[x,:] = result
+        
+    return fit, par</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.models_signal.T2star.T2star_fitting_pixel"><code class="name flex">
-<span>def <span class="ident">T2star_fitting_pixel</span></span>(<span>parallel_arguments)</span>
+<dt id="MDR_Library.mdreg.models.T1.pars"><code class="name flex">
+<span>def <span class="ident">pars</span></span>(<span>)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Runs the curve fit function for 1 pixel.</p>
-<h2 id="args">Args</h2>
-<p>parallel_arguments (tuple): tuple containing the input arguments for curve_fit, such as the input images, the T2-preparation times and more for the signal model fit.
-This tuple format is required for the success of the parallelisation process and consequent speed-up of the fitting.</p>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>fitx (numpy.ndarray): signal model fit at all time-series with shape [total time-series].</code></dt>
-<dd>&nbsp;</dd>
-<dt><code>S0x (numpy.ndarray): fitted parameter 'S0' with shape [1].</code></dt>
-<dd>&nbsp;</dd>
-</dl>
-<p>T2x (numpy.ndarray): fitted parameter 'T2' (ms) with shape [1].</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def T2star_fitting_pixel(parallel_arguments):
-    &#34;&#34;&#34; Runs the curve fit function for 1 pixel.
-
-    Args
-    ----
-    parallel_arguments (tuple): tuple containing the input arguments for curve_fit, such as the input images, the T2-preparation times and more for the signal model fit.
-                                This tuple format is required for the success of the parallelisation process and consequent speed-up of the fitting.
-
-    Returns
-    -------
-    fitx (numpy.ndarray): signal model fit at all time-series with shape [total time-series].    
-    S0x (numpy.ndarray): fitted parameter &#39;S0&#39; with shape [1].    
-    T2x (numpy.ndarray): fitted parameter &#39;T2&#39; (ms) with shape [1].  
-    &#34;&#34;&#34;
-    pixel_index, images_to_be_fitted, initial_guess, lb, ub, echo_times = parallel_arguments
-    #popt, pcov = curve_fit(exp_func, xdata = echo_times, ydata = images_to_be_fitted[pixel_index,:], p0=initial_guess, bounds=(lb,ub), method=&#39;trf&#39;)
-    popt, pcov = curve_fit(exp_func, xdata = echo_times, ydata = images_to_be_fitted[pixel_index,:], p0=initial_guess, bounds=(lb,ub), method=&#39;trf&#39;, maxfev=1000000)
-    S0x =  popt[0] 
-    T2_star_x =  popt[1]
-    fitx = []
-    for i in range(len(echo_times)):#time-series (t)
-        fitx.append(exp_func(echo_times[i], S0x, T2_star_x))
-    return fitx, S0x, T2_star_x</code></pre>
-</details>
-</dd>
-<dt id="MDR_Library.models_signal.T2star.exp_func"><code class="name flex">
-<span>def <span class="ident">exp_func</span></span>(<span>TE, S0, T2star)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>mono-exponential decay function to perform T2*-fitting.
-</p>
-<h2 id="args">Args</h2>
-<p>TE (numpy.ndarray): Echo times (TE) in the T2*-mapping sequence as input (independent variable) for the signal model fit.
-</p>
-<h2 id="returns">Returns</h2>
-<p>S0, T2star(numpy.ndarray): output signal model fit parameters.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def exp_func(TE,S0,T2star):
-    &#34;&#34;&#34; mono-exponential decay function to perform T2*-fitting.  
-
-    Args
-    ----
-    TE (numpy.ndarray): Echo times (TE) in the T2*-mapping sequence as input (independent variable) for the signal model fit.  
-
-    Returns
-    -------
-    S0, T2star(numpy.ndarray): output signal model fit parameters.  
-
-    &#34;&#34;&#34;
-  
-    return S0*np.exp(-TE/T2star)</code></pre>
-</details>
-</dd>
-<dt id="MDR_Library.models_signal.T2star.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>images_to_be_fitted, signal_model_parameters)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).</p>
-<h2 id="args">Args</h2>
-<p>images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].<br>
-signal_model_parameters (list): list containing TE times as list elements.
-</p>
-<h2 id="returns">Returns</h2>
-<p>fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim<em>y-dim, total time-series].<br>
-fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and 'T2star' stored in a single nd-array with shape [2, x-dim</em>y-dim].</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def main(images_to_be_fitted, signal_model_parameters):
-    &#34;&#34;&#34; main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).
-
-    Args
-    ----
-    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].  
-    signal_model_parameters (list): list containing TE times as list elements.  
-
-    Returns
-    -------
-    fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim*y-dim, total time-series].  
-    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;T2star&#39; stored in a single nd-array with shape [2, x-dim*y-dim].      
-    &#34;&#34;&#34;
-    
-    echo_times = signal_model_parameters
-    results = T2star_fitting(images_to_be_fitted, echo_times)
-
-    fit = results[0]
-    S0 = results[1]
-    T2star = results[2]
-
-    fitted_parameters_tuple = (S0, T2star) 
-    fitted_parameters = np.vstack(fitted_parameters_tuple) 
-
-    return fit, fitted_parameters</code></pre>
+<pre><code class="python">def pars():
+    return [&#39;A&#39;, &#39;B&#39;, &#39;T1app&#39;]</code></pre>
 </details>
 </dd>
 </dl>
@@ -342,15 +315,16 @@ fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and '
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.models_signal" href="index.html">MDR_Library.models_signal</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models" href="index.html">MDR_Library.mdreg.models</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MDR_Library.models_signal.T2star.T2star_fitting" href="#MDR_Library.models_signal.T2star.T2star_fitting">T2star_fitting</a></code></li>
-<li><code><a title="MDR_Library.models_signal.T2star.T2star_fitting_pixel" href="#MDR_Library.models_signal.T2star.T2star_fitting_pixel">T2star_fitting_pixel</a></code></li>
-<li><code><a title="MDR_Library.models_signal.T2star.exp_func" href="#MDR_Library.models_signal.T2star.exp_func">exp_func</a></code></li>
-<li><code><a title="MDR_Library.models_signal.T2star.main" href="#MDR_Library.models_signal.T2star.main">main</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.T1.bounds" href="#MDR_Library.mdreg.models.T1.bounds">bounds</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.T1.fit_pixel" href="#MDR_Library.mdreg.models.T1.fit_pixel">fit_pixel</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.T1.func" href="#MDR_Library.mdreg.models.T1.func">func</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.T1.main" href="#MDR_Library.mdreg.models.T1.main">main</a></code></li>
+<li><code><a title="MDR_Library.mdreg.models.T1.pars" href="#MDR_Library.mdreg.models.T1.pars">pars</a></code></li>
 </ul>
 </li>
 </ul>
