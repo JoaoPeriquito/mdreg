@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library.mdreg.main API documentation</title>
+<title>mdreg.main API documentation</title>
 <meta name="description" content="" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
@@ -19,17 +19,14 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR_Library.mdreg.main</code></h1>
+<h1 class="title">Module <code>mdreg.main</code></h1>
 </header>
 <section id="section-intro">
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">__all__ = [&#39;MDReg&#39;]
-
-
-import time, os, copy
+<pre><code class="python">import time, os, copy
 import multiprocessing
 from tqdm import tqdm
 import numpy as np
@@ -52,8 +49,7 @@ class MDReg:
         self.signal_parameters = None
         self.pixel_spacing = 1.0
         self.signal_model = constant
-        self.elastix = itk.ParameterObject.New()
-        self.elastix.AddParameterFile(os.path.join(default_path, &#39;BSplines.txt&#39;))
+        self.elastix = _default_bspline()
 
         # mdr optimization
         self.max_iterations = 5
@@ -202,6 +198,51 @@ class MDReg:
         self.iter.to_csv(os.path.join(path, &#39;largest_deformations.csv&#39;))
 
 
+def _default_bspline(*argv):
+    param_obj = itk.ParameterObject.New()
+    parameter_map_bspline = param_obj.GetDefaultParameterMap(&#39;bspline&#39;)
+    param_obj.AddParameterMap(parameter_map_bspline)
+    param_obj.SetParameter(&#34;FixedInternalImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;MovingInternalImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;FixedImageDimension&#34;, &#34;2&#34;)
+    param_obj.SetParameter(&#34;MovingImageDimension&#34;, &#34;2&#34;)
+    param_obj.SetParameter(&#34;UseDirectionCosines&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;Registration&#34;, &#34;MultiResolutionRegistration&#34;)
+    param_obj.SetParameter(&#34;ImageSampler&#34;, &#34;RandomCoordinate&#34;)
+    param_obj.SetParameter(&#34;Interpolator&#34;, &#34;BSplineInterpolator&#34;)
+    param_obj.SetParameter(&#34;ResampleInterpolator&#34;, &#34;FinalBSplineInterpolator&#34;)
+    param_obj.SetParameter(&#34;Resampler&#34;, &#34;DefaultResampler&#34;)
+    param_obj.SetParameter(&#34;BSplineInterpolationOrder&#34;, &#34;1&#34;)
+    param_obj.SetParameter(&#34;FinalBSplineInterpolationOrder&#34;, &#34;1&#34;)
+    param_obj.SetParameter(&#34;FixedImagePyramid&#34;, &#34;FixedSmoothingImagePyramid&#34;)
+    param_obj.SetParameter(&#34;MovingImagePyramid&#34;, &#34;MovingSmoothingImagePyramid&#34;)
+    param_obj.SetParameter(&#34;Optimizer&#34;, &#34;AdaptiveStochasticGradientDescent&#34;)
+    param_obj.SetParameter(&#34;HowToCombineTransforms&#34;, &#34;Compose&#34;)
+    param_obj.SetParameter(&#34;Transform&#34;, &#34;BSplineTransform&#34;)
+    param_obj.SetParameter(&#34;Metric&#34;, &#34;AdvancedMeanSquares&#34;)
+    param_obj.SetParameter(&#34;NumberOfHistogramBins&#34;, &#34;32&#34;)
+    param_obj.SetParameter(&#34;FinalGridSpacingInPhysicalUnits&#34;, [&#34;50.0&#34;, &#34;50.0&#34;])
+    param_obj.SetParameter(&#34;NumberOfResolutions&#34;, &#34;4&#34;)
+    param_obj.SetParameter(&#34;AutomaticParameterEstimation&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;ASGDParameterEstimationMethod&#34;, &#34;Original&#34;)
+    param_obj.SetParameter(&#34;MaximumNumberOfIterations&#34;, &#34;500&#34;)
+    param_obj.SetParameter(&#34;MaximumStepLength&#34;, &#34;0.1&#34;)
+    param_obj.SetParameter(&#34;NumberOfSpatialSamples&#34;, &#34;2048&#34;)
+    param_obj.SetParameter(&#34;NewSamplesEveryIteration&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;CheckNumberOfSamples&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;ErodeMask&#34;, &#34;false&#34;)
+    param_obj.SetParameter(&#34;ErodeFixedMask&#34;, &#34;false&#34;)
+    param_obj.SetParameter(&#34;DefaultPixelValue&#34;, &#34;0&#34;)
+    param_obj.SetParameter(&#34;WriteResultImage&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;ResultImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;ResultImageFormat&#34;, &#34;mhd&#34;)
+    for list_arguments in argv:
+        parameter = str(list_arguments[0])
+        value = str(list_arguments[1])
+        param_obj.SetParameter(parameter, value)
+    return param_obj
+
+
 def _export_animation(array, path, filename):
 
     file = os.path.join(path, filename + &#39;.gif&#39;)
@@ -213,6 +254,7 @@ def _export_animation(array, path, filename):
     anim = animation.FuncAnimation(fig, updatefig, interval=50, frames=array.shape[2])
     anim.save(file)
     #plt.show()
+
 
 def _export_imgs(array, path, filename, bounds=[-np.inf, np.inf]):
 
@@ -227,6 +269,7 @@ def _export_imgs(array, path, filename, bounds=[-np.inf, np.inf]):
     plt.savefig(fname=file)
     plt.close()
 
+
 def _maxnorm(d):
     &#34;&#34;&#34;This function calculates diagnostics from the registration process.
 
@@ -237,6 +280,7 @@ def _maxnorm(d):
     &#34;&#34;&#34;
     d = d[:,0,:]**2 + d[:,1,:]**2
     return np.nanmax(np.sqrt(d))
+
 
 def _elastix2dict(elastix_model_parameters):
     &#34;&#34;&#34;
@@ -260,7 +304,6 @@ def _dict2elastix(list_dictionaries_parameters):
     for one_map in list_dictionaries_parameters:
         elastix_model_parameters.AddParameterMap(one_map)
     return elastix_model_parameters
-
 
 
 def _coregister(args):
@@ -341,7 +384,7 @@ def _coregister(args):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="MDR_Library.mdreg.main.MDReg"><code class="flex name class">
+<dt id="mdreg.main.MDReg"><code class="flex name class">
 <span>class <span class="ident">MDReg</span></span>
 </code></dt>
 <dd>
@@ -359,8 +402,7 @@ def _coregister(args):
         self.signal_parameters = None
         self.pixel_spacing = 1.0
         self.signal_model = constant
-        self.elastix = itk.ParameterObject.New()
-        self.elastix.AddParameterFile(os.path.join(default_path, &#39;BSplines.txt&#39;))
+        self.elastix = _default_bspline()
 
         # mdr optimization
         self.max_iterations = 5
@@ -510,7 +552,7 @@ def _coregister(args):
 </details>
 <h3>Methods</h3>
 <dl>
-<dt id="MDR_Library.mdreg.main.MDReg.export"><code class="name flex">
+<dt id="mdreg.main.MDReg.export"><code class="name flex">
 <span>def <span class="ident">export</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -526,7 +568,7 @@ def _coregister(args):
     self.export_registered()</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.export_data"><code class="name flex">
+<dt id="mdreg.main.MDReg.export_data"><code class="name flex">
 <span>def <span class="ident">export_data</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -543,7 +585,7 @@ def _coregister(args):
     _export_animation(self.array, path, &#39;images&#39;)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.export_fit"><code class="name flex">
+<dt id="mdreg.main.MDReg.export_fit"><code class="name flex">
 <span>def <span class="ident">export_fit</span></span>(<span>self, name='')</span>
 </code></dt>
 <dd>
@@ -564,7 +606,7 @@ def _coregister(args):
     _export_animation(self.model_fit, path, &#39;modelfit&#39; + name)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.export_registered"><code class="name flex">
+<dt id="mdreg.main.MDReg.export_registered"><code class="name flex">
 <span>def <span class="ident">export_registered</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -587,7 +629,7 @@ def _coregister(args):
     self.iter.to_csv(os.path.join(path, &#39;largest_deformations.csv&#39;))</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.fit"><code class="name flex">
+<dt id="mdreg.main.MDReg.fit"><code class="name flex">
 <span>def <span class="ident">fit</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -631,7 +673,7 @@ def _coregister(args):
     print(&#39;Calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.fit_deformation"><code class="name flex">
+<dt id="mdreg.main.MDReg.fit_deformation"><code class="name flex">
 <span>def <span class="ident">fit_deformation</span></span>(<span>self, parallel=True, log=False, mask=None)</span>
 </code></dt>
 <dd>
@@ -672,7 +714,7 @@ def _coregister(args):
     return deformation</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.fit_signal"><code class="name flex">
+<dt id="mdreg.main.MDReg.fit_signal"><code class="name flex">
 <span>def <span class="ident">fit_signal</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -692,7 +734,7 @@ def _coregister(args):
     print(&#39;Finished fitting signal model (&#39; + str((time.time()-start)/60) + &#39; min)&#39;)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.read_elastix"><code class="name flex">
+<dt id="mdreg.main.MDReg.read_elastix"><code class="name flex">
 <span>def <span class="ident">read_elastix</span></span>(<span>self, file)</span>
 </code></dt>
 <dd>
@@ -705,7 +747,7 @@ def _coregister(args):
     self.elastix.AddParameterFile(file)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.set_array"><code class="name flex">
+<dt id="mdreg.main.MDReg.set_array"><code class="name flex">
 <span>def <span class="ident">set_array</span></span>(<span>self, array)</span>
 </code></dt>
 <dd>
@@ -721,7 +763,7 @@ def _coregister(args):
     self.coreg = np.reshape(self.coreg, (n[0],n[2]))</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.main.MDReg.set_elastix"><code class="name flex">
+<dt id="mdreg.main.MDReg.set_elastix"><code class="name flex">
 <span>def <span class="ident">set_elastix</span></span>(<span>self, **kwargs)</span>
 </code></dt>
 <dd>
@@ -748,24 +790,24 @@ def _coregister(args):
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.mdreg" href="index.html">MDR_Library.mdreg</a></code></li>
+<li><code><a title="mdreg" href="index.html">mdreg</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="MDR_Library.mdreg.main.MDReg" href="#MDR_Library.mdreg.main.MDReg">MDReg</a></code></h4>
+<h4><code><a title="mdreg.main.MDReg" href="#mdreg.main.MDReg">MDReg</a></code></h4>
 <ul class="two-column">
-<li><code><a title="MDR_Library.mdreg.main.MDReg.export" href="#MDR_Library.mdreg.main.MDReg.export">export</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.export_data" href="#MDR_Library.mdreg.main.MDReg.export_data">export_data</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.export_fit" href="#MDR_Library.mdreg.main.MDReg.export_fit">export_fit</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.export_registered" href="#MDR_Library.mdreg.main.MDReg.export_registered">export_registered</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.fit" href="#MDR_Library.mdreg.main.MDReg.fit">fit</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.fit_deformation" href="#MDR_Library.mdreg.main.MDReg.fit_deformation">fit_deformation</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.fit_signal" href="#MDR_Library.mdreg.main.MDReg.fit_signal">fit_signal</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.read_elastix" href="#MDR_Library.mdreg.main.MDReg.read_elastix">read_elastix</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.set_array" href="#MDR_Library.mdreg.main.MDReg.set_array">set_array</a></code></li>
-<li><code><a title="MDR_Library.mdreg.main.MDReg.set_elastix" href="#MDR_Library.mdreg.main.MDReg.set_elastix">set_elastix</a></code></li>
+<li><code><a title="mdreg.main.MDReg.export" href="#mdreg.main.MDReg.export">export</a></code></li>
+<li><code><a title="mdreg.main.MDReg.export_data" href="#mdreg.main.MDReg.export_data">export_data</a></code></li>
+<li><code><a title="mdreg.main.MDReg.export_fit" href="#mdreg.main.MDReg.export_fit">export_fit</a></code></li>
+<li><code><a title="mdreg.main.MDReg.export_registered" href="#mdreg.main.MDReg.export_registered">export_registered</a></code></li>
+<li><code><a title="mdreg.main.MDReg.fit" href="#mdreg.main.MDReg.fit">fit</a></code></li>
+<li><code><a title="mdreg.main.MDReg.fit_deformation" href="#mdreg.main.MDReg.fit_deformation">fit_deformation</a></code></li>
+<li><code><a title="mdreg.main.MDReg.fit_signal" href="#mdreg.main.MDReg.fit_signal">fit_signal</a></code></li>
+<li><code><a title="mdreg.main.MDReg.read_elastix" href="#mdreg.main.MDReg.read_elastix">read_elastix</a></code></li>
+<li><code><a title="mdreg.main.MDReg.set_array" href="#mdreg.main.MDReg.set_array">set_array</a></code></li>
+<li><code><a title="mdreg.main.MDReg.set_elastix" href="#mdreg.main.MDReg.set_elastix">set_elastix</a></code></li>
 </ul>
 </li>
 </ul>

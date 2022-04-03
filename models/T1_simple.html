@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library.mdreg.models.DWI_simple API documentation</title>
+<title>mdreg.models.T1_simple API documentation</title>
 <meta name="description" content="@author: Steven Sourbron
-DWI monoexponential model fit for the MDR Library
-2022" />
+T1-MOLLI model fit
+2022
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP.
+Modified …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -21,72 +23,93 @@ DWI monoexponential model fit for the MDR Library
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR_Library.mdreg.models.DWI_simple</code></h1>
+<h1 class="title">Module <code>mdreg.models.T1_simple</code></h1>
 </header>
 <section id="section-intro">
 <p>@author: Steven Sourbron
-DWI monoexponential model fit for the MDR Library<br>
-2022</p>
+T1-MOLLI model fit<br>
+2022<br>
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP.
+Modified Look-Locker inversion recovery (MOLLI) for high-resolution T1 mapping of the heart.
+Magn Reson Med. 2004 Jul;52(1):141-6. doi: 10.1002/mrm.20110. PMID: 15236377.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">&#34;&#34;&#34;
+<pre><code class="python">&#34;&#34;&#34; 
 @author: Steven Sourbron 
-DWI monoexponential model fit for the MDR Library  
-2022 
+T1-MOLLI model fit  
+2022  
+Messroghli DR, Radjenovic A, Kozerke S, Higgins DM, Sivananthan MU, Ridgway JP. 
+Modified Look-Locker inversion recovery (MOLLI) for high-resolution T1 mapping of the heart. 
+Magn Reson Med. 2004 Jul;52(1):141-6. doi: 10.1002/mrm.20110. PMID: 15236377. 
 &#34;&#34;&#34;
 
-import numpy as np 
-from .exp_decay import main as exp_decay
+import numpy as np
+from scipy.optimize import curve_fit
 
 def pars():
-    return [&#39;S0&#39;, &#39;ADC&#39;]
+    return [&#39;S0&#39;, &#39;alpha&#39;, &#39;T1&#39;]
 
 def bounds():
-    lower = [0,0]
-    upper = [np.inf, 1.0]
+    lower = [0, 1, 1.0] 
+    upper = [np.inf, 2.0, 3000.0]
     return lower, upper
 
-def main(images, bvalues):
-    &#34;&#34;&#34; main function that performs the DWI signal model-fit for input 2D image at multiple time-points. 
- 
+
+def func(TI, S0, alpha, T1):
+    &#34;&#34;&#34; exponential function for T1-fitting.
+
     Args
     ----
-    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].    
-    signal_model_parameters (list): list containing &#39;b-values&#39;, &#39;b-vectors&#39; and &#39;image_orientation_patient&#39; as list elements.    
+    x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.    
+    
+    Returns
+    -------
+    a, b, T1 (numpy.ndarray): signal model fitted parameters.  
+    &#34;&#34;&#34;
+    mz = 1 - alpha * np.exp(-TI*(alpha-1)/T1)
+    return np.abs(S0 * mz) 
+
+
+def main(images, TI):
+    &#34;&#34;&#34; main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).
+
+    Args
+    ----
+    images (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].  
+    t (list): list containing time points of exponential.  
 
     Returns
     -------
-    fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].   
-    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;ADC&#39; stored in a single nd-array with shape [2, x-dim*y-dim].       
+    fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim*y-dim, total time-series].  
+    par (numpy.ndarray): output signal model fit parameters &#39;S&#39; and &#39;R&#39; stored in a single nd-array with shape [2, x-dim*y-dim].      
     &#34;&#34;&#34;
-    
-    initial_value = [0.9, 0.0025]
-    maxfev = 500
 
+    TI = np.array(TI)
     shape = np.shape(images)
-    par = np.empty((3, shape[0], 2))
+    par = np.empty((shape[0], 3)) # pixels should be first for consistency
     fit = np.empty(shape)
-    nb = len(bvalues)
-    
-    fit[:,:nb], par[0,:,:] = exp_decay(
-        images[:,:nb], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-    fit[:,nb:2*nb], par[1,:,:] = exp_decay(
-        images[:,nb:2*nb], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-    fit[:,2*nb:], par[2,:,:] = exp_decay(
-        images[:,2*nb:], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-   
-    return fit, np.mean(par, axis=0)</code></pre>
+
+    for x in range(shape[0]):
+
+        signal = images[x,:]
+        p0 = [np.max(signal), 1.9, 1500.0]
+        try:
+            par[x,:], _ = curve_fit(func, 
+                xdata = TI, 
+                ydata = signal, 
+                p0 = p0, 
+                bounds = ([0, 1, 1.0], [np.inf, 2.0, 3000.0]), 
+                method = &#39;trf&#39;, 
+                maxfev = 500, 
+            )
+        except RuntimeError: #optimum not found.
+            par[x,:] = p0
+
+        fit[x,:] = func(TI, par[x,0], par[x,1], par[x,2])
+  
+    return fit, par</code></pre>
 </details>
 </section>
 <section>
@@ -96,7 +119,7 @@ def main(images, bvalues):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MDR_Library.mdreg.models.DWI_simple.bounds"><code class="name flex">
+<dt id="mdreg.models.T1_simple.bounds"><code class="name flex">
 <span>def <span class="ident">bounds</span></span>(<span>)</span>
 </code></dt>
 <dd>
@@ -106,70 +129,97 @@ def main(images, bvalues):
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def bounds():
-    lower = [0,0]
-    upper = [np.inf, 1.0]
+    lower = [0, 1, 1.0] 
+    upper = [np.inf, 2.0, 3000.0]
     return lower, upper</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.DWI_simple.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>images, bvalues)</span>
+<dt id="mdreg.models.T1_simple.func"><code class="name flex">
+<span>def <span class="ident">func</span></span>(<span>TI, S0, alpha, T1)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>main function that performs the DWI signal model-fit for input 2D image at multiple time-points. </p>
+<div class="desc"><p>exponential function for T1-fitting.</p>
 <h2 id="args">Args</h2>
-<p>images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].
-<br>
-signal_model_parameters (list): list containing 'b-values', 'b-vectors' and 'image_orientation_patient' as list elements.
+<p>x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.
 </p>
 <h2 id="returns">Returns</h2>
-<p>fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim<em>y-dim, total time-series]. <br>
-fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and 'ADC' stored in a single nd-array with shape [2, x-dim</em>y-dim].</p></div>
+<p>a, b, T1 (numpy.ndarray): signal model fitted parameters.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(images, bvalues):
-    &#34;&#34;&#34; main function that performs the DWI signal model-fit for input 2D image at multiple time-points. 
- 
+<pre><code class="python">def func(TI, S0, alpha, T1):
+    &#34;&#34;&#34; exponential function for T1-fitting.
+
     Args
     ----
-    images_to_be_fitted (numpy.ndarray): input image at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].    
-    signal_model_parameters (list): list containing &#39;b-values&#39;, &#39;b-vectors&#39; and &#39;image_orientation_patient&#39; as list elements.    
+    x (numpy.ndarray): Inversion times (TI) in the T1-mapping sequence as input for the signal model fit.    
+    
+    Returns
+    -------
+    a, b, T1 (numpy.ndarray): signal model fitted parameters.  
+    &#34;&#34;&#34;
+    mz = 1 - alpha * np.exp(-TI*(alpha-1)/T1)
+    return np.abs(S0 * mz) </code></pre>
+</details>
+</dd>
+<dt id="mdreg.models.T1_simple.main"><code class="name flex">
+<span>def <span class="ident">main</span></span>(<span>images, TI)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).</p>
+<h2 id="args">Args</h2>
+<p>images (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].<br>
+t (list): list containing time points of exponential.
+</p>
+<h2 id="returns">Returns</h2>
+<p>fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim<em>y-dim, total time-series].<br>
+par (numpy.ndarray): output signal model fit parameters 'S' and 'R' stored in a single nd-array with shape [2, x-dim</em>y-dim].</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def main(images, TI):
+    &#34;&#34;&#34; main function that performs the T2*-map signal model-fit for input 2D image at multiple time-points (TEs).
+
+    Args
+    ----
+    images (numpy.ndarray): input image at all time-series (i.e. at each TE time) with shape [x-dim*y-dim, total time-series].  
+    t (list): list containing time points of exponential.  
 
     Returns
     -------
-    fit (numpy.ndarray): signal model fit at all time-series (i.e. at each b-value) with shape [x-dim*y-dim, total time-series].   
-    fitted_parameters (numpy.ndarray): output signal model fit parameters &#39;S0&#39; and &#39;ADC&#39; stored in a single nd-array with shape [2, x-dim*y-dim].       
+    fit (numpy.ndarray): signal model fit per pixel for whole image with shape [x-dim*y-dim, total time-series].  
+    par (numpy.ndarray): output signal model fit parameters &#39;S&#39; and &#39;R&#39; stored in a single nd-array with shape [2, x-dim*y-dim].      
     &#34;&#34;&#34;
-    
-    initial_value = [0.9, 0.0025]
-    maxfev = 500
 
+    TI = np.array(TI)
     shape = np.shape(images)
-    par = np.empty((3, shape[0], 2))
+    par = np.empty((shape[0], 3)) # pixels should be first for consistency
     fit = np.empty(shape)
-    nb = len(bvalues)
-    
-    fit[:,:nb], par[0,:,:] = exp_decay(
-        images[:,:nb], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-    fit[:,nb:2*nb], par[1,:,:] = exp_decay(
-        images[:,nb:2*nb], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-    fit[:,2*nb:], par[2,:,:] = exp_decay(
-        images[:,2*nb:], bvalues, 
-        initial_value = initial_value, 
-        maxfev = maxfev, 
-    )
-   
-    return fit, np.mean(par, axis=0)</code></pre>
+
+    for x in range(shape[0]):
+
+        signal = images[x,:]
+        p0 = [np.max(signal), 1.9, 1500.0]
+        try:
+            par[x,:], _ = curve_fit(func, 
+                xdata = TI, 
+                ydata = signal, 
+                p0 = p0, 
+                bounds = ([0, 1, 1.0], [np.inf, 2.0, 3000.0]), 
+                method = &#39;trf&#39;, 
+                maxfev = 500, 
+            )
+        except RuntimeError: #optimum not found.
+            par[x,:] = p0
+
+        fit[x,:] = func(TI, par[x,0], par[x,1], par[x,2])
+  
+    return fit, par</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.DWI_simple.pars"><code class="name flex">
+<dt id="mdreg.models.T1_simple.pars"><code class="name flex">
 <span>def <span class="ident">pars</span></span>(<span>)</span>
 </code></dt>
 <dd>
@@ -179,7 +229,7 @@ fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and '
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def pars():
-    return [&#39;S0&#39;, &#39;ADC&#39;]</code></pre>
+    return [&#39;S0&#39;, &#39;alpha&#39;, &#39;T1&#39;]</code></pre>
 </details>
 </dd>
 </dl>
@@ -195,14 +245,15 @@ fitted_parameters (numpy.ndarray): output signal model fit parameters 'S0' and '
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.mdreg.models" href="index.html">MDR_Library.mdreg.models</a></code></li>
+<li><code><a title="mdreg.models" href="index.html">mdreg.models</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MDR_Library.mdreg.models.DWI_simple.bounds" href="#MDR_Library.mdreg.models.DWI_simple.bounds">bounds</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.DWI_simple.main" href="#MDR_Library.mdreg.models.DWI_simple.main">main</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.DWI_simple.pars" href="#MDR_Library.mdreg.models.DWI_simple.pars">pars</a></code></li>
+<li><code><a title="mdreg.models.T1_simple.bounds" href="#mdreg.models.T1_simple.bounds">bounds</a></code></li>
+<li><code><a title="mdreg.models.T1_simple.func" href="#mdreg.models.T1_simple.func">func</a></code></li>
+<li><code><a title="mdreg.models.T1_simple.main" href="#mdreg.models.T1_simple.main">main</a></code></li>
+<li><code><a title="mdreg.models.T1_simple.pars" href="#mdreg.models.T1_simple.pars">pars</a></code></li>
 </ul>
 </li>
 </ul>

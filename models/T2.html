@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>MDR_Library.mdreg.models.T2star API documentation</title>
+<title>mdreg.models.T2 API documentation</title>
 <meta name="description" content="@author: Kanishka Sharma
 T2*-mapping signal model-fit
 2021" />
@@ -21,7 +21,7 @@ T2*-mapping signal model-fit
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>MDR_Library.mdreg.models.T2star</code></h1>
+<h1 class="title">Module <code>mdreg.models.T2</code></h1>
 </header>
 <section id="section-intro">
 <p>@author: Kanishka Sharma<br>
@@ -45,14 +45,14 @@ from scipy.optimize import curve_fit
 import multiprocessing
 
 def pars():
-    return [&#39;S0&#39;, &#39;T2star&#39;]
+    return [&#39;S0&#39;, &#39;T2&#39;]
 
 def bounds():
     lower = [0,0]
     upper = [np.inf, 100]
     return lower, upper
-    
-def func(TE,S0,T2star):
+
+def func(TE,S0,T2):
     &#34;&#34;&#34; mono-exponential decay function to perform T2*-fitting.  
 
     Args
@@ -64,7 +64,8 @@ def func(TE,S0,T2star):
     S0, T2star(numpy.ndarray): output signal model fit parameters.  
 
     &#34;&#34;&#34;
-    return S0*np.exp(-TE/T2star)
+  
+    return S0*np.exp(-TE/T2)
 
 
 def fit_pixel(args):
@@ -82,13 +83,13 @@ def fit_pixel(args):
     T2x (numpy.ndarray): fitted parameter &#39;T2&#39; (ms) with shape [1].  
     &#34;&#34;&#34;
     S, TE = args
-    p0 = [np.max(S),50]
+    p0 = [np.max(S),200]
     try:
         par, _ = curve_fit(func, 
             xdata = TE, 
             ydata = S, 
             p0 = p0, 
-            bounds = ([0,10], [np.inf,100]),  
+            bounds = ([0,0], [np.inf,np.inf]),  
             method = &#39;trf&#39;, 
             maxfev = 500,
         )
@@ -133,7 +134,7 @@ def main(images, TE):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="MDR_Library.mdreg.models.T2star.bounds"><code class="name flex">
+<dt id="mdreg.models.T2.bounds"><code class="name flex">
 <span>def <span class="ident">bounds</span></span>(<span>)</span>
 </code></dt>
 <dd>
@@ -148,7 +149,7 @@ def main(images, TE):
     return lower, upper</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.T2star.fit_pixel"><code class="name flex">
+<dt id="mdreg.models.T2.fit_pixel"><code class="name flex">
 <span>def <span class="ident">fit_pixel</span></span>(<span>args)</span>
 </code></dt>
 <dd>
@@ -183,13 +184,13 @@ This tuple format is required for the success of the parallelisation process and
     T2x (numpy.ndarray): fitted parameter &#39;T2&#39; (ms) with shape [1].  
     &#34;&#34;&#34;
     S, TE = args
-    p0 = [np.max(S),50]
+    p0 = [np.max(S),200]
     try:
         par, _ = curve_fit(func, 
             xdata = TE, 
             ydata = S, 
             p0 = p0, 
-            bounds = ([0,10], [np.inf,100]),  
+            bounds = ([0,0], [np.inf,np.inf]),  
             method = &#39;trf&#39;, 
             maxfev = 500,
         )
@@ -198,8 +199,8 @@ This tuple format is required for the success of the parallelisation process and
     return func(TE, par[0], par[1]), par</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.T2star.func"><code class="name flex">
-<span>def <span class="ident">func</span></span>(<span>TE, S0, T2star)</span>
+<dt id="mdreg.models.T2.func"><code class="name flex">
+<span>def <span class="ident">func</span></span>(<span>TE, S0, T2)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>mono-exponential decay function to perform T2*-fitting.
@@ -213,7 +214,7 @@ This tuple format is required for the success of the parallelisation process and
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def func(TE,S0,T2star):
+<pre><code class="python">def func(TE,S0,T2):
     &#34;&#34;&#34; mono-exponential decay function to perform T2*-fitting.  
 
     Args
@@ -225,10 +226,11 @@ This tuple format is required for the success of the parallelisation process and
     S0, T2star(numpy.ndarray): output signal model fit parameters.  
 
     &#34;&#34;&#34;
-    return S0*np.exp(-TE/T2star)</code></pre>
+  
+    return S0*np.exp(-TE/T2)</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.T2star.main"><code class="name flex">
+<dt id="mdreg.models.T2.main"><code class="name flex">
 <span>def <span class="ident">main</span></span>(<span>images, TE)</span>
 </code></dt>
 <dd>
@@ -278,7 +280,7 @@ T2_star (numpy.ndarray): fitted parameter 'T2_star' (ms) with shape [x-dim*y-dim
     return fit, par</code></pre>
 </details>
 </dd>
-<dt id="MDR_Library.mdreg.models.T2star.pars"><code class="name flex">
+<dt id="mdreg.models.T2.pars"><code class="name flex">
 <span>def <span class="ident">pars</span></span>(<span>)</span>
 </code></dt>
 <dd>
@@ -288,7 +290,7 @@ T2_star (numpy.ndarray): fitted parameter 'T2_star' (ms) with shape [x-dim*y-dim
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def pars():
-    return [&#39;S0&#39;, &#39;T2star&#39;]</code></pre>
+    return [&#39;S0&#39;, &#39;T2&#39;]</code></pre>
 </details>
 </dd>
 </dl>
@@ -304,16 +306,16 @@ T2_star (numpy.ndarray): fitted parameter 'T2_star' (ms) with shape [x-dim*y-dim
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="MDR_Library.mdreg.models" href="index.html">MDR_Library.mdreg.models</a></code></li>
+<li><code><a title="mdreg.models" href="index.html">mdreg.models</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="MDR_Library.mdreg.models.T2star.bounds" href="#MDR_Library.mdreg.models.T2star.bounds">bounds</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.T2star.fit_pixel" href="#MDR_Library.mdreg.models.T2star.fit_pixel">fit_pixel</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.T2star.func" href="#MDR_Library.mdreg.models.T2star.func">func</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.T2star.main" href="#MDR_Library.mdreg.models.T2star.main">main</a></code></li>
-<li><code><a title="MDR_Library.mdreg.models.T2star.pars" href="#MDR_Library.mdreg.models.T2star.pars">pars</a></code></li>
+<li><code><a title="mdreg.models.T2.bounds" href="#mdreg.models.T2.bounds">bounds</a></code></li>
+<li><code><a title="mdreg.models.T2.fit_pixel" href="#mdreg.models.T2.fit_pixel">fit_pixel</a></code></li>
+<li><code><a title="mdreg.models.T2.func" href="#mdreg.models.T2.func">func</a></code></li>
+<li><code><a title="mdreg.models.T2.main" href="#mdreg.models.T2.main">main</a></code></li>
+<li><code><a title="mdreg.models.T2.pars" href="#mdreg.models.T2.pars">pars</a></code></li>
 </ul>
 </li>
 </ul>
