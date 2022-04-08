@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
 <title>mdreg API documentation</title>
-<meta name="description" content="" />
+<meta name="description" content="Description
+Python implementation of model-based image coregistration
+for quantitative medical imaging applications …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -22,11 +24,125 @@
 <h1 class="title">Package <code>mdreg</code></h1>
 </header>
 <section id="section-intro">
+<h1 id="description">Description</h1>
+<p>Python implementation of model-based image coregistration
+for quantitative medical imaging applications. </p>
+<p>The distribution comes with a number of common signal models and uses <a href="https://github.com/InsightSoftwareConsortium/ITKElastix">ITK-Elastix</a> for deformable image registration.</p>
+<h2 id="installation">Installation</h2>
+<p>Run <code>pip install <a title="mdreg" href="#mdreg">mdreg</a></code>. </p>
+<h2 id="example-data">Example data</h2>
+<p>Example data in <a href="https://shorturl.at/rwCUV">DICOM format</a> are provided for testing the setup.</p>
+<h2 id="how-to-use">How to use</h2>
+<p>Input data must be image arrays in numpy format, with dimensions <code>(x,y,z,t)</code> or <code>(x,y,t)</code>.
+To perform MDR on an image array <code>im</code> with default settings do: </p>
+<pre><code class="language-python">from mdreg import MDReg
+
+mdr = MDReg()
+mdr.set_array(im)
+mdr.fit()
+</code></pre>
+<p>When fitting is complete the motion-corrected data are in <code>mdr.coreg</code> in the same dimensions
+as the original <code>im</code>. The calculated deformation fields in format <code>(x,y,d,t)</code> or <code>(x,y,z,d,t)</code>
+can be found as <code>mdr.deformation</code>. The dimension <code>d</code> holds <code>x</code>, <code>y</code> components
+of the deformation field, and a third <code>z</code> component if the input array is 3D.</p>
+<p>The default settings will apply a linear signal model and coregistration
+as defined in the elastix parameter file <code>Bsplines.txt</code>. </p>
+<h1 id="customization">Customization</h1>
+<p>MDR can be configured to apply different signal models and elastix coregistration settings.
+A number of example models and alternative elastix parameter files are included
+in the distribution as templates.</p>
+<p>The following example fits a mono-exponential decay, uses a mask <code>im_mask</code> for co-registration and applies an elastix parameter file <code>par_file</code> optimized for a previous DTI-MRI study:</p>
+<pre><code class="language-python">from mdreg import MDReg
+from mdreg.models import exponential_decay
+
+mdr = MDReg()
+mdr.set_array(im)
+mdr.set_mask(im_mask)
+mdr.signal_model = exponential_decay
+mdr.read_elastix(par_file)
+mdr.fit()
+</code></pre>
+<p><code>im_mask</code> must be a binary (0s and 1s) or boolean (Trues and Falses) image array in numpy format with the same dimensions as <code>im</code>.</p>
+<p>The signal model often depends on fixed constants and signal parameters
+such as sequence parameters in MRI, or patient-specific constants. These
+should all be grouped in a list and set before running the signal model. </p>
+<p>Equally elastix parameters can be fine tuned, either by importing a
+dedicated elastix file, or by modifying the settings. </p>
+<p>You may also choose if you wish to run the process in multiple cores (<code>parallel</code>) and to print the co-registration progress to the terminal plus a text file (<code>log</code>) or not.</p>
+<p>Then, a number of parameters are available to optimize MDR such as
+the precision (stopping criterion) and maximum number of iterations.</p>
+<p>Some examples:</p>
+<pre><code class="language-python">from mdreg import MDReg
+from mdreg.models import exponential_decay
+
+t = [0.0, 1.25, 2.50, 3.75]     # time points for exponential in sec
+
+mdr = MDReg()
+mdr.set_array(im)
+mdr.signal_parameters = t
+mdr.signal_model = exponential_decay
+mdr.set_elastix(MaximumNumberOfIterations = 256)   # change defaults
+mdr.precision = 0.5         # default = 1
+mdr.max_iterations = 3      # default = 5
+mdr.parallel = False        # default = True
+mdr.log = True              # default = False
+mdr.fit()
+</code></pre>
+<p><code><a title="mdreg" href="#mdreg">mdreg</a></code> comes with a number of options to
+export results and diagnostics:</p>
+<pre><code class="language-python">mdr.export_unregistered = True      # export parameters and fit without registration
+mdr.export_path = filepath          # default is a results folder in the current working directory
+mdr.export()                        # export results after calling fit. 
+</code></pre>
+<p>This export creates movies of original images, motion corrected images,
+modelfits, and maps of the fitted parameters.</p>
+<h1 id="model-fitting-without-motion-correction">Model fitting without motion correction</h1>
+<p><code><a title="mdreg.MDReg" href="#mdreg.MDReg">MDReg</a></code> also can be used to perform model fitting
+without correcting the motion. The following script
+fits a linearised exponential model to each pixel and exports data
+of model and fit:</p>
+<pre><code class="language-python">from mdreg import MDReg
+from mdreg.models import exponential_decay
+
+mdr = MDReg()
+mdr.set_array(im)
+mdr.signal_model = linear_exponential_decay
+mdr.fit_signal()
+mdr.export_data()
+mdr.export_fit()
+</code></pre>
+<h1 id="defining-new-mdr-models">Defining new MDR models</h1>
+<p>A model must be defined as a separate module or class with two required functions <code><a title="mdreg.main" href="main.html">mdreg.main</a></code> and <code>pars()</code>.</p>
+<p><code>pars()</code> must return a list of strings specifying the names of the model parameters.
+<code><a title="mdreg.main" href="main.html">mdreg.main</a>(im, const)</code> performs the pixel based model fitting and has two required arguments.
+<code>im</code> is a numpy ndarray with dimensions <code>(x,y,z,t)</code>, <code>(x,y,t)</code> or <code>(x,t)</code>. <code>const</code> is a list
+of any constant model parameters.</p>
+<p>The function must return the fit to the model as an numpy ndarray with the same dimensions
+as <code>im</code>, and an ndarray <code>pars</code> with dimensions <code>(x,y,z,p)</code>, <code>(x,y,p)</code> or <code>(x,p)</code>. Here <code>p</code> enumerates
+the model parameters. </p>
+<h2 id="context">Context</h2>
+<p><code><a title="mdreg" href="#mdreg">mdreg</a></code> was first developed for use in quantitative renal MRI in the iBEAt study,
+and validated against group-wise model-free registration
+(Tagkalakis F, et al. Model-based motion correction outperforms a model-free method in quantitative renal MRI. Abstract-1383, ISMRM 2021).</p>
+<h2 id="acknowledgement">Acknowledgement</h2>
+<p>The iBEAt study is part of the BEAt-DKD project. The BEAt-DKD project has received funding from the Innovative Medicines Initiative 2 Joint Undertaking under grant agreement No 115974. This Joint Undertaking receives support from the European Union’s Horizon 2020 research and innovation programme and EFPIA with JDRF. For a full list of BEAt-DKD partners, see www.beat-dkd.eu.</p>
+<h2 id="authors">Authors</h2>
+<p>Kanishka Sharma, Joao Almeida e Sousa, Steven Sourbron</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from .main import *
+<pre><code class="python">import base64
+import requests
+url = &#39;https://api.github.com/repos/QIB-Sheffield/mdreg/contents/README.md&#39;
+req = requests.get(url)
+if req.status_code == requests.codes.ok:
+    req = req.json()  # the response is a JSON
+    content = base64.b64decode(req[&#39;content&#39;])
+    introduction = content.decode()
+__doc__ = introduction
+
+from .main import *
 __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 </details>
 </section>
@@ -65,10 +181,13 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 
         # input
         self.array = None
+        self.coreg_mask = None
         self.signal_parameters = None
         self.pixel_spacing = 1.0
         self.signal_model = constant
         self.elastix = _default_bspline()
+        self.parallel = True
+        self.log = False
 
         # mdr optimization
         self.max_iterations = 5
@@ -96,6 +215,11 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
         self.coreg = array
         n = self._npdt
         self.coreg = np.reshape(self.coreg, (n[0],n[2]))
+    
+    def set_mask(self, mask_array):
+        self.coreg_mask = mask_array
+        n = self._npdt
+        self.coreg_mask = np.reshape(self.coreg_mask, (n[0],n[2]))
 
     def read_elastix(self, file):
         self.elastix.AddParameterFile(file)
@@ -148,7 +272,7 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
         self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
         print(&#39;Finished fitting signal model (&#39; + str((time.time()-start)/60) + &#39; min)&#39;)
 
-    def fit_deformation(self, parallel=True, log=False, mask=None):
+    def fit_deformation(self):
 
         start = time.time()
         print(&#39;Performing coregistration..&#39;)
@@ -156,22 +280,24 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
         deformation = np.empty(self._npdt)
         dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
         # If mask isn&#39;t same shape as images, then don&#39;t use it
-        if isinstance(mask, np.ndarray):
-            if np.shape(mask) != self.array.shape: mask = None  
-        if not parallel:
+        if isinstance(self.coreg_mask, np.ndarray):
+            if np.shape(self.coreg_mask) != self.array.shape: mask = None
+            else: mask = self.coreg_mask
+        else: mask = None
+        if not self.parallel:
             for t in tqdm(range(nt), desc=&#39;Coregistration progress&#39;): #dynamics
                 if mask is not None: 
                     mask_t = mask[...,t]
                 else: 
                     mask_t = None
-                args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask_t)
+                args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
                 self.coreg[:,t], deformation[:,:,t] = _coregister(args)
         else:
             pool = multiprocessing.Pool(processes=os.cpu_count()-1)
             if mask is None:
-                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask) for t in range(nt)] #dynamics
+                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
             else:
-                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask[...,t]) for t in range(nt)] #dynamics
+                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
             results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=&#39;Coregistration progress&#39;))
             for t in range(nt):
                 self.coreg[:,t] = results[t][0]
@@ -340,7 +466,7 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 </details>
 </dd>
 <dt id="mdreg.MDReg.fit_deformation"><code class="name flex">
-<span>def <span class="ident">fit_deformation</span></span>(<span>self, parallel=True, log=False, mask=None)</span>
+<span>def <span class="ident">fit_deformation</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -348,7 +474,7 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def fit_deformation(self, parallel=True, log=False, mask=None):
+<pre><code class="python">def fit_deformation(self):
 
     start = time.time()
     print(&#39;Performing coregistration..&#39;)
@@ -356,22 +482,24 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
     deformation = np.empty(self._npdt)
     dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
     # If mask isn&#39;t same shape as images, then don&#39;t use it
-    if isinstance(mask, np.ndarray):
-        if np.shape(mask) != self.array.shape: mask = None  
-    if not parallel:
+    if isinstance(self.coreg_mask, np.ndarray):
+        if np.shape(self.coreg_mask) != self.array.shape: mask = None
+        else: mask = self.coreg_mask
+    else: mask = None
+    if not self.parallel:
         for t in tqdm(range(nt), desc=&#39;Coregistration progress&#39;): #dynamics
             if mask is not None: 
                 mask_t = mask[...,t]
             else: 
                 mask_t = None
-            args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask_t)
+            args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
             self.coreg[:,t], deformation[:,:,t] = _coregister(args)
     else:
         pool = multiprocessing.Pool(processes=os.cpu_count()-1)
         if mask is None:
-            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask) for t in range(nt)] #dynamics
+            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
         else:
-            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, log, mask[...,t]) for t in range(nt)] #dynamics
+            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
         results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=&#39;Coregistration progress&#39;))
         for t in range(nt):
             self.coreg[:,t] = results[t][0]
@@ -443,6 +571,21 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
         self.elastix.SetParameter(tag, str(value))       </code></pre>
 </details>
 </dd>
+<dt id="mdreg.MDReg.set_mask"><code class="name flex">
+<span>def <span class="ident">set_mask</span></span>(<span>self, mask_array)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_mask(self, mask_array):
+    self.coreg_mask = mask_array
+    n = self._npdt
+    self.coreg_mask = np.reshape(self.coreg_mask, (n[0],n[2]))</code></pre>
+</details>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -451,7 +594,22 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#description">Description</a><ul>
+<li><a href="#installation">Installation</a></li>
+<li><a href="#example-data">Example data</a></li>
+<li><a href="#how-to-use">How to use</a></li>
+</ul>
+</li>
+<li><a href="#customization">Customization</a></li>
+<li><a href="#model-fitting-without-motion-correction">Model fitting without motion correction</a></li>
+<li><a href="#defining-new-mdr-models">Defining new MDR models</a><ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#acknowledgement">Acknowledgement</a></li>
+<li><a href="#authors">Authors</a></li>
+</ul>
+</li>
+</ul>
 </div>
 <ul id="index">
 <li><h3><a href="#header-submodules">Sub-modules</a></h3>
@@ -475,6 +633,7 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <li><code><a title="mdreg.MDReg.read_elastix" href="#mdreg.MDReg.read_elastix">read_elastix</a></code></li>
 <li><code><a title="mdreg.MDReg.set_array" href="#mdreg.MDReg.set_array">set_array</a></code></li>
 <li><code><a title="mdreg.MDReg.set_elastix" href="#mdreg.MDReg.set_elastix">set_elastix</a></code></li>
+<li><code><a title="mdreg.MDReg.set_mask" href="#mdreg.MDReg.set_mask">set_mask</a></code></li>
 </ul>
 </li>
 </ul>
