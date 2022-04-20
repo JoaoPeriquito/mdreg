@@ -135,12 +135,15 @@ and validated against group-wise model-free registration
 <pre><code class="python">import base64
 import requests
 url = &#39;https://api.github.com/repos/QIB-Sheffield/mdreg/contents/README.md&#39;
-req = requests.get(url)
-if req.status_code == requests.codes.ok:
-    req = req.json()  # the response is a JSON
-    content = base64.b64decode(req[&#39;content&#39;])
-    introduction = content.decode()
+try:
+    req = requests.get(url)
+    if req.status_code == requests.codes.ok:
+        req = req.json()  # the response is a JSON
+        content = base64.b64decode(req[&#39;content&#39;])
+        introduction = content.decode()
     __doc__ = introduction
+except: # if there&#39;s no internet connection
+    pass
 
 from .main import *
 __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
