@@ -50,8 +50,8 @@ class MDReg:
         self.signal_parameters = None
         self.pixel_spacing = 1.0
         self.signal_model = constant
-        self.elastix = _default_bspline()
-        self.parallel = True
+        self.elastix = default_bspline()
+        self.parallel = False # Turning this on somehow causes weasel to relaunch
         self.log = False
 
         # mdr optimization
@@ -65,7 +65,13 @@ class MDReg:
         self.pars = None
         self.iter = None
         self.export_path = os.path.join(default_path, &#39;results&#39;)
-        self.export_unregistered = True
+        self.export_unregistered = False
+
+        # status
+        self.status = None
+        self.pinned_message = &#39;&#39;
+        self.message = &#39;&#39;
+        self.iteration = 1
 
     @property
     def _npdt(self): 
@@ -102,22 +108,24 @@ class MDReg:
         start = time.time()
         improvement = []
         converged = False
-        it = 1
+        self.iteration = 1
         while not converged: 
             startit = time.time()
-            print(&#39;Starting MDR iteration &#39; + str(it))
             self.fit_signal()
             if self.export_unregistered:
-                if it == 1: self.export_fit(name=&#39;_unregistered&#39;)
+                if self.iteration == 1: 
+                    self.export_fit(name=&#39;_unregistered&#39;)
             deformation = self.fit_deformation()
             improvement.append(_maxnorm(self.deformation-deformation))
             self.deformation = deformation
             converged = improvement[-1] &lt;= self.precision 
-            if it == self.max_iterations: converged=True
+            if self.iteration == self.max_iterations: 
+                converged=True
             calctime = (time.time()-startit)/60
-            print(&#39;Finished MDR iteration &#39; + str(it) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
-            print(&#39;Improvement after MDR iteration &#39; + str(it) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
-            it += 1       
+            print(&#39;Finished MDR iteration &#39; + str(self.iteration) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
+            print(&#39;Improvement after MDR iteration &#39; + str(self.iteration) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
+            self.iteration += 1 
+
         self.fit_signal()
         shape = self.array.shape
         self.coreg = np.reshape(self.coreg, shape)
@@ -125,49 +133,60 @@ class MDReg:
         self.deformation = np.reshape(self.deformation, shape[:-1]+(nd,)+(shape[-1],))
         self.iter = pd.DataFrame({&#39;Maximum deformation&#39;: improvement}) 
 
-        print(&#39;Calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
+        print(&#39;Total calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
 
     def fit_signal(self):
 
+        msg = self.pinned_message + &#39;, fitting signal model (iteration &#39; + str(self.iteration) + &#39;)&#39;
+        print(msg)
+        if self.status is not None:
+            self.status.message(msg)
         start = time.time()
-        print(&#39;Fitting signal model..&#39;)
         fit, pars = self.signal_model.main(self.coreg, self.signal_parameters)
         shape = self.array.shape
         self.model_fit = np.reshape(fit, shape)
         self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
-        print(&#39;Finished fitting signal model (&#39; + str((time.time()-start)/60) + &#39; min)&#39;)
+        print(&#39;Model fitting time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
 
     def fit_deformation(self):
 
+        msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
+        print(msg)
+        if self.status is not None:
+            self.status.message(msg)
         start = time.time()
-        print(&#39;Performing coregistration..&#39;)
         nt = self._npdt[-1]
         deformation = np.empty(self._npdt)
         dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
         # If mask isn&#39;t same shape as images, then don&#39;t use it
         if isinstance(self.coreg_mask, np.ndarray):
-            if np.shape(self.coreg_mask) != self.array.shape: mask = None
-            else: mask = self.coreg_mask
-        else: mask = None
+            if np.shape(self.coreg_mask) != self.array.shape: 
+                mask = None
+            else: 
+                mask = self.coreg_mask
+        else: 
+            mask = None
         if not self.parallel:
-            for t in tqdm(range(nt), desc=&#39;Coregistration progress&#39;): #dynamics
-                if mask is not None: 
+            for t in tqdm(range(nt), desc=msg): # dynamics
+                if self.status is not None:
+                    self.status.progress(t, nt)
+                if mask is not None:
                     mask_t = mask[...,t]
                 else: 
                     mask_t = None
                 args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
                 self.coreg[:,t], deformation[:,:,t] = _coregister(args)
         else:
-            pool = multiprocessing.Pool(processes=os.cpu_count()-1)
+            pool = multiprocessing.Pool(processes=os.cpu_count())
             if mask is None:
                 args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
             else:
                 args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
-            results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=&#39;Coregistration progress&#39;))
+            results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=msg))
             for t in range(nt):
                 self.coreg[:,t] = results[t][0]
                 deformation[:,:,t] = results[t][1]
-        print(&#39;Finished coregistration (&#39; + str((time.time()-start)/60) +&#39; min)&#39;)
+        print(&#39;Coregistration time: &#39; + str((time.time()-start)/60) +&#39; min&#39;)
         return deformation
 
     def export(self):
@@ -208,42 +227,139 @@ class MDReg:
         self.iter.to_csv(os.path.join(path, &#39;largest_deformations.csv&#39;))
 
 
-def _default_bspline():
+def default_bspline():
     param_obj = itk.ParameterObject.New()
     parameter_map_bspline = param_obj.GetDefaultParameterMap(&#39;bspline&#39;)
-    param_obj.AddParameterMap(parameter_map_bspline)
+    param_obj.AddParameterMap(parameter_map_bspline) #why??
+    # *********************
+    # * ImageTypes
+    # *********************
     param_obj.SetParameter(&#34;FixedInternalImagePixelType&#34;, &#34;float&#34;)
     param_obj.SetParameter(&#34;MovingInternalImagePixelType&#34;, &#34;float&#34;)
     param_obj.SetParameter(&#34;FixedImageDimension&#34;, &#34;2&#34;)
     param_obj.SetParameter(&#34;MovingImageDimension&#34;, &#34;2&#34;)
     param_obj.SetParameter(&#34;UseDirectionCosines&#34;, &#34;true&#34;)
+    # *********************
+    # * Components
+    # *********************
     param_obj.SetParameter(&#34;Registration&#34;, &#34;MultiResolutionRegistration&#34;)
+    # Image intensities are sampled using an ImageSampler, Interpolator and ResampleInterpolator.
+    # Image sampler is responsible for selecting points in the image to sample. 
+    # The RandomCoordinate simply selects random positions.
     param_obj.SetParameter(&#34;ImageSampler&#34;, &#34;RandomCoordinate&#34;)
+    # Interpolator is responsible for interpolating off-grid positions during optimization. 
+    # The BSplineInterpolator with BSplineInterpolationOrder = 1 used here is very fast and uses very little memory
     param_obj.SetParameter(&#34;Interpolator&#34;, &#34;BSplineInterpolator&#34;)
+    # ResampleInterpolator here chosen to be FinalBSplineInterpolator with FinalBSplineInterpolationOrder = 1
+    # is used to resample the result image from the moving image once the final transformation has been found.
+    # This is a one-time step so the additional computational complexity is worth the trade-off for higher image quality.
     param_obj.SetParameter(&#34;ResampleInterpolator&#34;, &#34;FinalBSplineInterpolator&#34;)
     param_obj.SetParameter(&#34;Resampler&#34;, &#34;DefaultResampler&#34;)
+    # Order of B-Spline interpolation used during registration/optimisation.
+    # It may improve accuracy if you set this to 3. Never use 0.
+    # An order of 1 gives linear interpolation. This is in most 
+    # applications a good choice.
     param_obj.SetParameter(&#34;BSplineInterpolationOrder&#34;, &#34;1&#34;)
-    param_obj.SetParameter(&#34;FinalBSplineInterpolationOrder&#34;, &#34;1&#34;)
+    # Order of B-Spline interpolation used for applying the final
+    # deformation.
+    # 3 gives good accuracy; recommended in most cases.
+    # 1 gives worse accuracy (linear interpolation)
+    # 0 gives worst accuracy, but is appropriate for binary images
+    # (masks, segmentations); equivalent to nearest neighbor interpolation.
+    param_obj.SetParameter(&#34;FinalBSplineInterpolationOrder&#34;, &#34;3&#34;)
+    # Pyramids found in Elastix:
+    # 1)        Smoothing -&gt; Smoothing: YES, Downsampling: NO
+    # 2)        Recursive -&gt; Smoothing: YES, Downsampling: YES
+    #      If Recursive is chosen and only # of resolutions is given 
+    #      then downsamlping by a factor of 2 (default)
+    # 3)        Shrinking -&gt; Smoothing: NO, Downsampling: YES
     param_obj.SetParameter(&#34;FixedImagePyramid&#34;, &#34;FixedSmoothingImagePyramid&#34;)
     param_obj.SetParameter(&#34;MovingImagePyramid&#34;, &#34;MovingSmoothingImagePyramid&#34;)
     param_obj.SetParameter(&#34;Optimizer&#34;, &#34;AdaptiveStochasticGradientDescent&#34;)
+    # Whether transforms are combined by composition or by addition.
+    # In generally, Compose is the best option in most cases.
+    # It does not influence the results very much.
     param_obj.SetParameter(&#34;HowToCombineTransforms&#34;, &#34;Compose&#34;)
     param_obj.SetParameter(&#34;Transform&#34;, &#34;BSplineTransform&#34;)
+    # Metric
     param_obj.SetParameter(&#34;Metric&#34;, &#34;AdvancedMeanSquares&#34;)
+    # Number of grey level bins in each resolution level,
+    # for the mutual information. 16 or 32 usually works fine.
+    # You could also employ a hierarchical strategy:
+    #(NumberOfHistogramBins 16 32 64)
     param_obj.SetParameter(&#34;NumberOfHistogramBins&#34;, &#34;32&#34;)
+    # *********************
+    # * Transformation
+    # *********************
+    # The control point spacing of the bspline transformation in 
+    # the finest resolution level. Can be specified for each 
+    # dimension differently. Unit: mm.
+    # The lower this value, the more flexible the deformation.
+    # Low values may improve the accuracy, but may also cause
+    # unrealistic deformations.
+    # By default the grid spacing is halved after every resolution,
+    # such that the final grid spacing is obtained in the last 
+    # resolution level.
+    # The grid spacing here is specified in voxel units.
+    #(FinalGridSpacingInPhysicalUnits 10.0 10.0)
+    #(FinalGridSpacingInVoxels 8)
     param_obj.SetParameter(&#34;FinalGridSpacingInPhysicalUnits&#34;, [&#34;50.0&#34;, &#34;50.0&#34;])
+    # *********************
+    # * Optimizer settings
+    # *********************
+    # The number of resolutions. 1 Is only enough if the expected
+    # deformations are small. 3 or 4 mostly works fine. For large
+    # images and large deformations, 5 or 6 may even be useful.
     param_obj.SetParameter(&#34;NumberOfResolutions&#34;, &#34;4&#34;)
     param_obj.SetParameter(&#34;AutomaticParameterEstimation&#34;, &#34;true&#34;)
     param_obj.SetParameter(&#34;ASGDParameterEstimationMethod&#34;, &#34;Original&#34;)
     param_obj.SetParameter(&#34;MaximumNumberOfIterations&#34;, &#34;500&#34;)
-    param_obj.SetParameter(&#34;MaximumStepLength&#34;, &#34;0.1&#34;)
+    # The step size of the optimizer, in mm. By default the voxel size is used.
+    # which usually works well. In case of unusual high-resolution images
+    # (eg histology) it is necessary to increase this value a bit, to the size
+    # of the &#34;smallest visible structure&#34; in the image:
+    param_obj.SetParameter(&#34;MaximumStepLength&#34;, &#34;1.0&#34;) 
+    # *********************
+    # * Pyramid settings
+    # *********************
+    # The downsampling/blurring factors for the image pyramids.
+    # By default, the images are downsampled by a factor of 2
+    # compared to the next resolution.
+    #param_obj.SetParameter(&#34;ImagePyramidSchedule&#34;, &#34;8 8  4 4  2 2  1 1&#34;)
+    # *********************
+    # * Sampler parameters
+    # *********************
+    # Number of spatial samples used to compute the mutual
+    # information (and its derivative) in each iteration.
+    # With an AdaptiveStochasticGradientDescent optimizer,
+    # in combination with the two options below, around 2000
+    # samples may already suffice.
     param_obj.SetParameter(&#34;NumberOfSpatialSamples&#34;, &#34;2048&#34;)
+    # Refresh these spatial samples in every iteration, and select
+    # them randomly. See the manual for information on other sampling
+    # strategies.
     param_obj.SetParameter(&#34;NewSamplesEveryIteration&#34;, &#34;true&#34;)
     param_obj.SetParameter(&#34;CheckNumberOfSamples&#34;, &#34;true&#34;)
+    # *********************
+    # * Mask settings
+    # *********************
+    # If you use a mask, this option is important. 
+    # If the mask serves as region of interest, set it to false.
+    # If the mask indicates which pixels are valid, then set it to true.
+    # If you do not use a mask, the option doesn&#39;t matter.
     param_obj.SetParameter(&#34;ErodeMask&#34;, &#34;false&#34;)
     param_obj.SetParameter(&#34;ErodeFixedMask&#34;, &#34;false&#34;)
+    # *********************
+    # * Output settings
+    # *********************
+    #Default pixel value for pixels that come from outside the picture:
     param_obj.SetParameter(&#34;DefaultPixelValue&#34;, &#34;0&#34;)
+    # Choose whether to generate the deformed moving image.
+    # You can save some time by setting this to false, if you are
+    # not interested in the final deformed moving image, but only
+    # want to analyze the deformation field for example.
     param_obj.SetParameter(&#34;WriteResultImage&#34;, &#34;true&#34;)
+    # The pixel type and format of the resulting deformed moving image
     param_obj.SetParameter(&#34;ResultImagePixelType&#34;, &#34;float&#34;)
     param_obj.SetParameter(&#34;ResultImageFormat&#34;, &#34;mhd&#34;)
     return param_obj
@@ -386,6 +502,156 @@ def _coregister(args):
 <section>
 </section>
 <section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="mdreg.main.default_bspline"><code class="name flex">
+<span>def <span class="ident">default_bspline</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def default_bspline():
+    param_obj = itk.ParameterObject.New()
+    parameter_map_bspline = param_obj.GetDefaultParameterMap(&#39;bspline&#39;)
+    param_obj.AddParameterMap(parameter_map_bspline) #why??
+    # *********************
+    # * ImageTypes
+    # *********************
+    param_obj.SetParameter(&#34;FixedInternalImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;MovingInternalImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;FixedImageDimension&#34;, &#34;2&#34;)
+    param_obj.SetParameter(&#34;MovingImageDimension&#34;, &#34;2&#34;)
+    param_obj.SetParameter(&#34;UseDirectionCosines&#34;, &#34;true&#34;)
+    # *********************
+    # * Components
+    # *********************
+    param_obj.SetParameter(&#34;Registration&#34;, &#34;MultiResolutionRegistration&#34;)
+    # Image intensities are sampled using an ImageSampler, Interpolator and ResampleInterpolator.
+    # Image sampler is responsible for selecting points in the image to sample. 
+    # The RandomCoordinate simply selects random positions.
+    param_obj.SetParameter(&#34;ImageSampler&#34;, &#34;RandomCoordinate&#34;)
+    # Interpolator is responsible for interpolating off-grid positions during optimization. 
+    # The BSplineInterpolator with BSplineInterpolationOrder = 1 used here is very fast and uses very little memory
+    param_obj.SetParameter(&#34;Interpolator&#34;, &#34;BSplineInterpolator&#34;)
+    # ResampleInterpolator here chosen to be FinalBSplineInterpolator with FinalBSplineInterpolationOrder = 1
+    # is used to resample the result image from the moving image once the final transformation has been found.
+    # This is a one-time step so the additional computational complexity is worth the trade-off for higher image quality.
+    param_obj.SetParameter(&#34;ResampleInterpolator&#34;, &#34;FinalBSplineInterpolator&#34;)
+    param_obj.SetParameter(&#34;Resampler&#34;, &#34;DefaultResampler&#34;)
+    # Order of B-Spline interpolation used during registration/optimisation.
+    # It may improve accuracy if you set this to 3. Never use 0.
+    # An order of 1 gives linear interpolation. This is in most 
+    # applications a good choice.
+    param_obj.SetParameter(&#34;BSplineInterpolationOrder&#34;, &#34;1&#34;)
+    # Order of B-Spline interpolation used for applying the final
+    # deformation.
+    # 3 gives good accuracy; recommended in most cases.
+    # 1 gives worse accuracy (linear interpolation)
+    # 0 gives worst accuracy, but is appropriate for binary images
+    # (masks, segmentations); equivalent to nearest neighbor interpolation.
+    param_obj.SetParameter(&#34;FinalBSplineInterpolationOrder&#34;, &#34;3&#34;)
+    # Pyramids found in Elastix:
+    # 1)        Smoothing -&gt; Smoothing: YES, Downsampling: NO
+    # 2)        Recursive -&gt; Smoothing: YES, Downsampling: YES
+    #      If Recursive is chosen and only # of resolutions is given 
+    #      then downsamlping by a factor of 2 (default)
+    # 3)        Shrinking -&gt; Smoothing: NO, Downsampling: YES
+    param_obj.SetParameter(&#34;FixedImagePyramid&#34;, &#34;FixedSmoothingImagePyramid&#34;)
+    param_obj.SetParameter(&#34;MovingImagePyramid&#34;, &#34;MovingSmoothingImagePyramid&#34;)
+    param_obj.SetParameter(&#34;Optimizer&#34;, &#34;AdaptiveStochasticGradientDescent&#34;)
+    # Whether transforms are combined by composition or by addition.
+    # In generally, Compose is the best option in most cases.
+    # It does not influence the results very much.
+    param_obj.SetParameter(&#34;HowToCombineTransforms&#34;, &#34;Compose&#34;)
+    param_obj.SetParameter(&#34;Transform&#34;, &#34;BSplineTransform&#34;)
+    # Metric
+    param_obj.SetParameter(&#34;Metric&#34;, &#34;AdvancedMeanSquares&#34;)
+    # Number of grey level bins in each resolution level,
+    # for the mutual information. 16 or 32 usually works fine.
+    # You could also employ a hierarchical strategy:
+    #(NumberOfHistogramBins 16 32 64)
+    param_obj.SetParameter(&#34;NumberOfHistogramBins&#34;, &#34;32&#34;)
+    # *********************
+    # * Transformation
+    # *********************
+    # The control point spacing of the bspline transformation in 
+    # the finest resolution level. Can be specified for each 
+    # dimension differently. Unit: mm.
+    # The lower this value, the more flexible the deformation.
+    # Low values may improve the accuracy, but may also cause
+    # unrealistic deformations.
+    # By default the grid spacing is halved after every resolution,
+    # such that the final grid spacing is obtained in the last 
+    # resolution level.
+    # The grid spacing here is specified in voxel units.
+    #(FinalGridSpacingInPhysicalUnits 10.0 10.0)
+    #(FinalGridSpacingInVoxels 8)
+    param_obj.SetParameter(&#34;FinalGridSpacingInPhysicalUnits&#34;, [&#34;50.0&#34;, &#34;50.0&#34;])
+    # *********************
+    # * Optimizer settings
+    # *********************
+    # The number of resolutions. 1 Is only enough if the expected
+    # deformations are small. 3 or 4 mostly works fine. For large
+    # images and large deformations, 5 or 6 may even be useful.
+    param_obj.SetParameter(&#34;NumberOfResolutions&#34;, &#34;4&#34;)
+    param_obj.SetParameter(&#34;AutomaticParameterEstimation&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;ASGDParameterEstimationMethod&#34;, &#34;Original&#34;)
+    param_obj.SetParameter(&#34;MaximumNumberOfIterations&#34;, &#34;500&#34;)
+    # The step size of the optimizer, in mm. By default the voxel size is used.
+    # which usually works well. In case of unusual high-resolution images
+    # (eg histology) it is necessary to increase this value a bit, to the size
+    # of the &#34;smallest visible structure&#34; in the image:
+    param_obj.SetParameter(&#34;MaximumStepLength&#34;, &#34;1.0&#34;) 
+    # *********************
+    # * Pyramid settings
+    # *********************
+    # The downsampling/blurring factors for the image pyramids.
+    # By default, the images are downsampled by a factor of 2
+    # compared to the next resolution.
+    #param_obj.SetParameter(&#34;ImagePyramidSchedule&#34;, &#34;8 8  4 4  2 2  1 1&#34;)
+    # *********************
+    # * Sampler parameters
+    # *********************
+    # Number of spatial samples used to compute the mutual
+    # information (and its derivative) in each iteration.
+    # With an AdaptiveStochasticGradientDescent optimizer,
+    # in combination with the two options below, around 2000
+    # samples may already suffice.
+    param_obj.SetParameter(&#34;NumberOfSpatialSamples&#34;, &#34;2048&#34;)
+    # Refresh these spatial samples in every iteration, and select
+    # them randomly. See the manual for information on other sampling
+    # strategies.
+    param_obj.SetParameter(&#34;NewSamplesEveryIteration&#34;, &#34;true&#34;)
+    param_obj.SetParameter(&#34;CheckNumberOfSamples&#34;, &#34;true&#34;)
+    # *********************
+    # * Mask settings
+    # *********************
+    # If you use a mask, this option is important. 
+    # If the mask serves as region of interest, set it to false.
+    # If the mask indicates which pixels are valid, then set it to true.
+    # If you do not use a mask, the option doesn&#39;t matter.
+    param_obj.SetParameter(&#34;ErodeMask&#34;, &#34;false&#34;)
+    param_obj.SetParameter(&#34;ErodeFixedMask&#34;, &#34;false&#34;)
+    # *********************
+    # * Output settings
+    # *********************
+    #Default pixel value for pixels that come from outside the picture:
+    param_obj.SetParameter(&#34;DefaultPixelValue&#34;, &#34;0&#34;)
+    # Choose whether to generate the deformed moving image.
+    # You can save some time by setting this to false, if you are
+    # not interested in the final deformed moving image, but only
+    # want to analyze the deformation field for example.
+    param_obj.SetParameter(&#34;WriteResultImage&#34;, &#34;true&#34;)
+    # The pixel type and format of the resulting deformed moving image
+    param_obj.SetParameter(&#34;ResultImagePixelType&#34;, &#34;float&#34;)
+    param_obj.SetParameter(&#34;ResultImageFormat&#34;, &#34;mhd&#34;)
+    return param_obj</code></pre>
+</details>
+</dd>
+</dl>
 </section>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
@@ -409,8 +675,8 @@ def _coregister(args):
         self.signal_parameters = None
         self.pixel_spacing = 1.0
         self.signal_model = constant
-        self.elastix = _default_bspline()
-        self.parallel = True
+        self.elastix = default_bspline()
+        self.parallel = False # Turning this on somehow causes weasel to relaunch
         self.log = False
 
         # mdr optimization
@@ -424,7 +690,13 @@ def _coregister(args):
         self.pars = None
         self.iter = None
         self.export_path = os.path.join(default_path, &#39;results&#39;)
-        self.export_unregistered = True
+        self.export_unregistered = False
+
+        # status
+        self.status = None
+        self.pinned_message = &#39;&#39;
+        self.message = &#39;&#39;
+        self.iteration = 1
 
     @property
     def _npdt(self): 
@@ -461,22 +733,24 @@ def _coregister(args):
         start = time.time()
         improvement = []
         converged = False
-        it = 1
+        self.iteration = 1
         while not converged: 
             startit = time.time()
-            print(&#39;Starting MDR iteration &#39; + str(it))
             self.fit_signal()
             if self.export_unregistered:
-                if it == 1: self.export_fit(name=&#39;_unregistered&#39;)
+                if self.iteration == 1: 
+                    self.export_fit(name=&#39;_unregistered&#39;)
             deformation = self.fit_deformation()
             improvement.append(_maxnorm(self.deformation-deformation))
             self.deformation = deformation
             converged = improvement[-1] &lt;= self.precision 
-            if it == self.max_iterations: converged=True
+            if self.iteration == self.max_iterations: 
+                converged=True
             calctime = (time.time()-startit)/60
-            print(&#39;Finished MDR iteration &#39; + str(it) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
-            print(&#39;Improvement after MDR iteration &#39; + str(it) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
-            it += 1       
+            print(&#39;Finished MDR iteration &#39; + str(self.iteration) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
+            print(&#39;Improvement after MDR iteration &#39; + str(self.iteration) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
+            self.iteration += 1 
+
         self.fit_signal()
         shape = self.array.shape
         self.coreg = np.reshape(self.coreg, shape)
@@ -484,49 +758,60 @@ def _coregister(args):
         self.deformation = np.reshape(self.deformation, shape[:-1]+(nd,)+(shape[-1],))
         self.iter = pd.DataFrame({&#39;Maximum deformation&#39;: improvement}) 
 
-        print(&#39;Calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
+        print(&#39;Total calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
 
     def fit_signal(self):
 
+        msg = self.pinned_message + &#39;, fitting signal model (iteration &#39; + str(self.iteration) + &#39;)&#39;
+        print(msg)
+        if self.status is not None:
+            self.status.message(msg)
         start = time.time()
-        print(&#39;Fitting signal model..&#39;)
         fit, pars = self.signal_model.main(self.coreg, self.signal_parameters)
         shape = self.array.shape
         self.model_fit = np.reshape(fit, shape)
         self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
-        print(&#39;Finished fitting signal model (&#39; + str((time.time()-start)/60) + &#39; min)&#39;)
+        print(&#39;Model fitting time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
 
     def fit_deformation(self):
 
+        msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
+        print(msg)
+        if self.status is not None:
+            self.status.message(msg)
         start = time.time()
-        print(&#39;Performing coregistration..&#39;)
         nt = self._npdt[-1]
         deformation = np.empty(self._npdt)
         dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
         # If mask isn&#39;t same shape as images, then don&#39;t use it
         if isinstance(self.coreg_mask, np.ndarray):
-            if np.shape(self.coreg_mask) != self.array.shape: mask = None
-            else: mask = self.coreg_mask
-        else: mask = None
+            if np.shape(self.coreg_mask) != self.array.shape: 
+                mask = None
+            else: 
+                mask = self.coreg_mask
+        else: 
+            mask = None
         if not self.parallel:
-            for t in tqdm(range(nt), desc=&#39;Coregistration progress&#39;): #dynamics
-                if mask is not None: 
+            for t in tqdm(range(nt), desc=msg): # dynamics
+                if self.status is not None:
+                    self.status.progress(t, nt)
+                if mask is not None:
                     mask_t = mask[...,t]
                 else: 
                     mask_t = None
                 args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
                 self.coreg[:,t], deformation[:,:,t] = _coregister(args)
         else:
-            pool = multiprocessing.Pool(processes=os.cpu_count()-1)
+            pool = multiprocessing.Pool(processes=os.cpu_count())
             if mask is None:
                 args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
             else:
                 args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
-            results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=&#39;Coregistration progress&#39;))
+            results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=msg))
             for t in range(nt):
                 self.coreg[:,t] = results[t][0]
                 deformation[:,:,t] = results[t][1]
-        print(&#39;Finished coregistration (&#39; + str((time.time()-start)/60) +&#39; min)&#39;)
+        print(&#39;Coregistration time: &#39; + str((time.time()-start)/60) +&#39; min&#39;)
         return deformation
 
     def export(self):
@@ -663,22 +948,24 @@ def _coregister(args):
     start = time.time()
     improvement = []
     converged = False
-    it = 1
+    self.iteration = 1
     while not converged: 
         startit = time.time()
-        print(&#39;Starting MDR iteration &#39; + str(it))
         self.fit_signal()
         if self.export_unregistered:
-            if it == 1: self.export_fit(name=&#39;_unregistered&#39;)
+            if self.iteration == 1: 
+                self.export_fit(name=&#39;_unregistered&#39;)
         deformation = self.fit_deformation()
         improvement.append(_maxnorm(self.deformation-deformation))
         self.deformation = deformation
         converged = improvement[-1] &lt;= self.precision 
-        if it == self.max_iterations: converged=True
+        if self.iteration == self.max_iterations: 
+            converged=True
         calctime = (time.time()-startit)/60
-        print(&#39;Finished MDR iteration &#39; + str(it) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
-        print(&#39;Improvement after MDR iteration &#39; + str(it) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
-        it += 1       
+        print(&#39;Finished MDR iteration &#39; + str(self.iteration) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
+        print(&#39;Improvement after MDR iteration &#39; + str(self.iteration) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
+        self.iteration += 1 
+
     self.fit_signal()
     shape = self.array.shape
     self.coreg = np.reshape(self.coreg, shape)
@@ -686,7 +973,7 @@ def _coregister(args):
     self.deformation = np.reshape(self.deformation, shape[:-1]+(nd,)+(shape[-1],))
     self.iter = pd.DataFrame({&#39;Maximum deformation&#39;: improvement}) 
 
-    print(&#39;Calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
+    print(&#39;Total calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
 </details>
 </dd>
 <dt id="mdreg.main.MDReg.fit_deformation"><code class="name flex">
@@ -700,35 +987,43 @@ def _coregister(args):
 </summary>
 <pre><code class="python">def fit_deformation(self):
 
+    msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
+    print(msg)
+    if self.status is not None:
+        self.status.message(msg)
     start = time.time()
-    print(&#39;Performing coregistration..&#39;)
     nt = self._npdt[-1]
     deformation = np.empty(self._npdt)
     dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
     # If mask isn&#39;t same shape as images, then don&#39;t use it
     if isinstance(self.coreg_mask, np.ndarray):
-        if np.shape(self.coreg_mask) != self.array.shape: mask = None
-        else: mask = self.coreg_mask
-    else: mask = None
+        if np.shape(self.coreg_mask) != self.array.shape: 
+            mask = None
+        else: 
+            mask = self.coreg_mask
+    else: 
+        mask = None
     if not self.parallel:
-        for t in tqdm(range(nt), desc=&#39;Coregistration progress&#39;): #dynamics
-            if mask is not None: 
+        for t in tqdm(range(nt), desc=msg): # dynamics
+            if self.status is not None:
+                self.status.progress(t, nt)
+            if mask is not None:
                 mask_t = mask[...,t]
             else: 
                 mask_t = None
             args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
             self.coreg[:,t], deformation[:,:,t] = _coregister(args)
     else:
-        pool = multiprocessing.Pool(processes=os.cpu_count()-1)
+        pool = multiprocessing.Pool(processes=os.cpu_count())
         if mask is None:
             args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
         else:
             args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
-        results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=&#39;Coregistration progress&#39;))
+        results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=msg))
         for t in range(nt):
             self.coreg[:,t] = results[t][0]
             deformation[:,:,t] = results[t][1]
-    print(&#39;Finished coregistration (&#39; + str((time.time()-start)/60) +&#39; min)&#39;)
+    print(&#39;Coregistration time: &#39; + str((time.time()-start)/60) +&#39; min&#39;)
     return deformation</code></pre>
 </details>
 </dd>
@@ -743,13 +1038,16 @@ def _coregister(args):
 </summary>
 <pre><code class="python">def fit_signal(self):
 
+    msg = self.pinned_message + &#39;, fitting signal model (iteration &#39; + str(self.iteration) + &#39;)&#39;
+    print(msg)
+    if self.status is not None:
+        self.status.message(msg)
     start = time.time()
-    print(&#39;Fitting signal model..&#39;)
     fit, pars = self.signal_model.main(self.coreg, self.signal_parameters)
     shape = self.array.shape
     self.model_fit = np.reshape(fit, shape)
     self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
-    print(&#39;Finished fitting signal model (&#39; + str((time.time()-start)/60) + &#39; min)&#39;)</code></pre>
+    print(&#39;Model fitting time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
 </details>
 </dd>
 <dt id="mdreg.main.MDReg.read_elastix"><code class="name flex">
@@ -824,6 +1122,11 @@ def _coregister(args):
 <li><h3>Super-module</h3>
 <ul>
 <li><code><a title="mdreg" href="index.html">mdreg</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="mdreg.main.default_bspline" href="#mdreg.main.default_bspline">default_bspline</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
