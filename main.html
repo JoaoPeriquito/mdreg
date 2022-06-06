@@ -26,7 +26,9 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">import time, os, copy
+<pre><code class="python">__all__ = [&#39;MDReg&#39;, &#39;default_bspline&#39;]
+
+import time, os, copy
 import multiprocessing
 from tqdm import tqdm
 import numpy as np
@@ -78,7 +80,7 @@ class MDReg:
         &#34;&#34;&#34;
         (nr of pixels, nr of dimensions, nr of time points)
         &#34;&#34;&#34;
-        shape = self.array.shape  
+        shape = self.array.shape
         return np.prod(shape[:-1]), len(shape)-1, shape[-1]
 
     def set_array(self, array):
@@ -151,7 +153,6 @@ class MDReg:
     def fit_deformation(self):
 
         msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
-        print(msg)
         if self.status is not None:
             self.status.message(msg)
         start = time.time()
@@ -703,7 +704,7 @@ def _coregister(args):
         &#34;&#34;&#34;
         (nr of pixels, nr of dimensions, nr of time points)
         &#34;&#34;&#34;
-        shape = self.array.shape  
+        shape = self.array.shape
         return np.prod(shape[:-1]), len(shape)-1, shape[-1]
 
     def set_array(self, array):
@@ -776,7 +777,6 @@ def _coregister(args):
     def fit_deformation(self):
 
         msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
-        print(msg)
         if self.status is not None:
             self.status.message(msg)
         start = time.time()
@@ -988,7 +988,6 @@ def _coregister(args):
 <pre><code class="python">def fit_deformation(self):
 
     msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
-    print(msg)
     if self.status is not None:
         self.status.message(msg)
     start = time.time()

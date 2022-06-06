@@ -32,7 +32,7 @@ for quantitative medical imaging applications. </p>
 <p>Run <code>pip install <a title="mdreg" href="#mdreg">mdreg</a></code>. </p>
 <h2 id="example-data">Example data</h2>
 <p>Example data in <a href="https://shorturl.at/rwCUV">DICOM format</a> are provided for testing the setup.</p>
-<h2 id="how-to-use">How to use</h2>
+<h2 id="how-to-run">How to run</h2>
 <p>Input data must be image arrays in numpy format, with dimensions <code>(x,y,z,t)</code> or <code>(x,y,t)</code>.
 To perform MDR on an image array <code>im</code> with default settings do: </p>
 <pre><code class="language-python">from mdreg import MDReg
@@ -41,12 +41,16 @@ mdr = MDReg()
 mdr.set_array(im)
 mdr.fit()
 </code></pre>
-<p>When fitting is complete the motion-corrected data are in <code>mdr.coreg</code> in the same dimensions
-as the original <code>im</code>. The calculated deformation fields in format <code>(x,y,d,t)</code> or <code>(x,y,z,d,t)</code>
-can be found as <code>mdr.deformation</code>. The dimension <code>d</code> holds <code>x</code>, <code>y</code> components
-of the deformation field, and a third <code>z</code> component if the input array is 3D.</p>
-<p>The default settings will apply a linear signal model and coregistration
+<p>These default settings will apply a linear signal model and coregistration
 as defined in the elastix parameter file <code>Bsplines.txt</code>. </p>
+<h2 id="outputs">Outputs</h2>
+<p>When fitting is complete the following data are available:</p>
+<ul>
+<li><code>mdr.coreg</code>: motion-corrected data are in the same dimensions as the original <code>im</code>. </li>
+<li><code>mdr.deformation</code>: the calculated deformation fields in format <code>(x,y,d,t)</code> or <code>(x,y,z,d,t)</code>. The dimension <code>d</code> holds <code>x</code>, <code>y</code> components of the deformation field. The third <code>z</code> component exists if the input array is 3D. </li>
+<li><code>mdr.fit</code>: the model fit to the coregistered images in the same dimensions <code>(x,y,z,t)</code> or <code>(x,y,t)</code> as the original <code>im</code>. </li>
+<li><code>mdr.par</code>: the fitted parameters are in dimensions <code>(x,z,p)</code> or <code>(x,y,z,p)</code> (for 3D data), where <code>p</code> enumerates the model parameters.</li>
+</ul>
 <h1 id="customization">Customization</h1>
 <p>MDR can be configured to apply different signal models and elastix coregistration settings.
 A number of example models and alternative elastix parameter files are included
@@ -62,7 +66,7 @@ mdr.signal_model = exponential_decay
 mdr.read_elastix(par_file)
 mdr.fit()
 </code></pre>
-<p><code>im_mask</code> must be a binary (0s and 1s) or boolean (Trues and Falses) image array in numpy format with the same dimensions as <code>im</code>.</p>
+<p><code>im_mask</code> must be a binary (0's and 1's) or boolean (True's and False's) image array in numpy format with the same dimensions as <code>im</code>.</p>
 <p>The signal model often depends on fixed constants and signal parameters
 such as sequence parameters in MRI, or patient-specific constants. These
 should all be grouped in a list and set before running the signal model. </p>
@@ -97,7 +101,7 @@ mdr.export()                        # export results after calling fit.
 <p>This export creates movies of original images, motion corrected images,
 modelfits, and maps of the fitted parameters.</p>
 <h1 id="model-fitting-without-motion-correction">Model fitting without motion correction</h1>
-<p><code><a title="mdreg.MDReg" href="#mdreg.MDReg">MDReg</a></code> also can be used to perform model fitting
+<p><code>MDReg</code> also can be used to perform model fitting
 without correcting the motion. The following script
 fits a linearised exponential model to each pixel and exports data
 of model and fit:</p>
@@ -145,8 +149,7 @@ try:
 except: # if there&#39;s no internet connection
     pass
 
-from .main import *
-__all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
+from .main import *</code></pre>
 </details>
 </section>
 <section>
@@ -167,463 +170,6 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <section>
 </section>
 <section>
-<h2 class="section-title" id="header-classes">Classes</h2>
-<dl>
-<dt id="mdreg.MDReg"><code class="flex name class">
-<span>class <span class="ident">MDReg</span></span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class MDReg:
-
-    def __init__(self):
-
-        # input
-        self.array = None
-        self.coreg_mask = None
-        self.signal_parameters = None
-        self.pixel_spacing = 1.0
-        self.signal_model = constant
-        self.elastix = default_bspline()
-        self.parallel = False # Turning this on somehow causes weasel to relaunch
-        self.log = False
-
-        # mdr optimization
-        self.max_iterations = 5
-        self.precision = 1.0
-
-        # output
-        self.coreg = None
-        self.model_fit = None
-        self.deformation = None
-        self.pars = None
-        self.iter = None
-        self.export_path = os.path.join(default_path, &#39;results&#39;)
-        self.export_unregistered = False
-
-        # status
-        self.status = None
-        self.pinned_message = &#39;&#39;
-        self.message = &#39;&#39;
-        self.iteration = 1
-
-    @property
-    def _npdt(self): 
-        &#34;&#34;&#34;
-        (nr of pixels, nr of dimensions, nr of time points)
-        &#34;&#34;&#34;
-        shape = self.array.shape  
-        return np.prod(shape[:-1]), len(shape)-1, shape[-1]
-
-    def set_array(self, array):
-        self.array = array
-        self.coreg = array
-        n = self._npdt
-        self.coreg = np.reshape(self.coreg, (n[0],n[2]))
-    
-    def set_mask(self, mask_array):
-        self.coreg_mask = mask_array
-        n = self._npdt
-        self.coreg_mask = np.reshape(self.coreg_mask, (n[0],n[2]))
-
-    def read_elastix(self, file):
-        self.elastix.AddParameterFile(file)
-    
-    def set_elastix(self, **kwargs):
-        for tag, value in kwargs.items():
-            self.elastix.SetParameter(tag, str(value))       
-
-    def fit(self):
-
-        n = self._npdt
-        self.coreg = copy.deepcopy(self.array)
-        self.coreg = np.reshape(self.coreg, (n[0],n[2]))
-        self.deformation = np.zeros(n)
-        start = time.time()
-        improvement = []
-        converged = False
-        self.iteration = 1
-        while not converged: 
-            startit = time.time()
-            self.fit_signal()
-            if self.export_unregistered:
-                if self.iteration == 1: 
-                    self.export_fit(name=&#39;_unregistered&#39;)
-            deformation = self.fit_deformation()
-            improvement.append(_maxnorm(self.deformation-deformation))
-            self.deformation = deformation
-            converged = improvement[-1] &lt;= self.precision 
-            if self.iteration == self.max_iterations: 
-                converged=True
-            calctime = (time.time()-startit)/60
-            print(&#39;Finished MDR iteration &#39; + str(self.iteration) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
-            print(&#39;Improvement after MDR iteration &#39; + str(self.iteration) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
-            self.iteration += 1 
-
-        self.fit_signal()
-        shape = self.array.shape
-        self.coreg = np.reshape(self.coreg, shape)
-        nd = len(shape)-1
-        self.deformation = np.reshape(self.deformation, shape[:-1]+(nd,)+(shape[-1],))
-        self.iter = pd.DataFrame({&#39;Maximum deformation&#39;: improvement}) 
-
-        print(&#39;Total calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
-
-    def fit_signal(self):
-
-        msg = self.pinned_message + &#39;, fitting signal model (iteration &#39; + str(self.iteration) + &#39;)&#39;
-        print(msg)
-        if self.status is not None:
-            self.status.message(msg)
-        start = time.time()
-        fit, pars = self.signal_model.main(self.coreg, self.signal_parameters)
-        shape = self.array.shape
-        self.model_fit = np.reshape(fit, shape)
-        self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
-        print(&#39;Model fitting time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)
-
-    def fit_deformation(self):
-
-        msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
-        print(msg)
-        if self.status is not None:
-            self.status.message(msg)
-        start = time.time()
-        nt = self._npdt[-1]
-        deformation = np.empty(self._npdt)
-        dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
-        # If mask isn&#39;t same shape as images, then don&#39;t use it
-        if isinstance(self.coreg_mask, np.ndarray):
-            if np.shape(self.coreg_mask) != self.array.shape: 
-                mask = None
-            else: 
-                mask = self.coreg_mask
-        else: 
-            mask = None
-        if not self.parallel:
-            for t in tqdm(range(nt), desc=msg): # dynamics
-                if self.status is not None:
-                    self.status.progress(t, nt)
-                if mask is not None:
-                    mask_t = mask[...,t]
-                else: 
-                    mask_t = None
-                args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
-                self.coreg[:,t], deformation[:,:,t] = _coregister(args)
-        else:
-            pool = multiprocessing.Pool(processes=os.cpu_count())
-            if mask is None:
-                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
-            else:
-                args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
-            results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=msg))
-            for t in range(nt):
-                self.coreg[:,t] = results[t][0]
-                deformation[:,:,t] = results[t][1]
-        print(&#39;Coregistration time: &#39; + str((time.time()-start)/60) +&#39; min&#39;)
-        return deformation
-
-    def export(self):
-
-        self.export_data()
-        self.export_fit()
-        self.export_registered()
-
-    def export_data(self):
-
-        print(&#39;Exporting data..&#39;)
-        path = self.export_path 
-        if not os.path.exists(path): os.mkdir(path)
-        _export_animation(self.array, path, &#39;images&#39;)
-
-    def export_fit(self, name=&#39;&#39;):
-
-        print(&#39;Exporting fit..&#39; + name)
-        path = self.export_path 
-        pars = self.signal_model.pars()
-        if not os.path.exists(path): os.mkdir(path)
-        lower, upper = self.signal_model.bounds()
-        for i in range(len(pars)):
-            _export_imgs(self.pars[...,i], path, pars[i] + name, bounds=[lower[i],upper[i]])
-        _export_animation(self.model_fit, path, &#39;modelfit&#39; + name)
-
-    def export_registered(self):
-
-        print(&#39;Exporting registration..&#39;)
-        path = self.export_path 
-        if not os.path.exists(path): os.mkdir(path)
-        defx = np.squeeze(self.deformation[:,:,0,:])
-        defy = np.squeeze(self.deformation[:,:,1,:])
-        _export_animation(self.coreg, path, &#39;coregistered&#39;)
-        _export_animation(defx, path, &#39;deformation_field_x&#39;)
-        _export_animation(defy, path, &#39;deformation_field_y&#39;)
-        _export_animation(np.sqrt(defx**2 + defy**2), path, &#39;deformation_field&#39;)
-        self.iter.to_csv(os.path.join(path, &#39;largest_deformations.csv&#39;))</code></pre>
-</details>
-<h3>Methods</h3>
-<dl>
-<dt id="mdreg.MDReg.export"><code class="name flex">
-<span>def <span class="ident">export</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def export(self):
-
-    self.export_data()
-    self.export_fit()
-    self.export_registered()</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.export_data"><code class="name flex">
-<span>def <span class="ident">export_data</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def export_data(self):
-
-    print(&#39;Exporting data..&#39;)
-    path = self.export_path 
-    if not os.path.exists(path): os.mkdir(path)
-    _export_animation(self.array, path, &#39;images&#39;)</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.export_fit"><code class="name flex">
-<span>def <span class="ident">export_fit</span></span>(<span>self, name='')</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def export_fit(self, name=&#39;&#39;):
-
-    print(&#39;Exporting fit..&#39; + name)
-    path = self.export_path 
-    pars = self.signal_model.pars()
-    if not os.path.exists(path): os.mkdir(path)
-    lower, upper = self.signal_model.bounds()
-    for i in range(len(pars)):
-        _export_imgs(self.pars[...,i], path, pars[i] + name, bounds=[lower[i],upper[i]])
-    _export_animation(self.model_fit, path, &#39;modelfit&#39; + name)</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.export_registered"><code class="name flex">
-<span>def <span class="ident">export_registered</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def export_registered(self):
-
-    print(&#39;Exporting registration..&#39;)
-    path = self.export_path 
-    if not os.path.exists(path): os.mkdir(path)
-    defx = np.squeeze(self.deformation[:,:,0,:])
-    defy = np.squeeze(self.deformation[:,:,1,:])
-    _export_animation(self.coreg, path, &#39;coregistered&#39;)
-    _export_animation(defx, path, &#39;deformation_field_x&#39;)
-    _export_animation(defy, path, &#39;deformation_field_y&#39;)
-    _export_animation(np.sqrt(defx**2 + defy**2), path, &#39;deformation_field&#39;)
-    self.iter.to_csv(os.path.join(path, &#39;largest_deformations.csv&#39;))</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.fit"><code class="name flex">
-<span>def <span class="ident">fit</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def fit(self):
-
-    n = self._npdt
-    self.coreg = copy.deepcopy(self.array)
-    self.coreg = np.reshape(self.coreg, (n[0],n[2]))
-    self.deformation = np.zeros(n)
-    start = time.time()
-    improvement = []
-    converged = False
-    self.iteration = 1
-    while not converged: 
-        startit = time.time()
-        self.fit_signal()
-        if self.export_unregistered:
-            if self.iteration == 1: 
-                self.export_fit(name=&#39;_unregistered&#39;)
-        deformation = self.fit_deformation()
-        improvement.append(_maxnorm(self.deformation-deformation))
-        self.deformation = deformation
-        converged = improvement[-1] &lt;= self.precision 
-        if self.iteration == self.max_iterations: 
-            converged=True
-        calctime = (time.time()-startit)/60
-        print(&#39;Finished MDR iteration &#39; + str(self.iteration) + &#39; after &#39; + str(calctime) + &#39; min&#39;) 
-        print(&#39;Improvement after MDR iteration &#39; + str(self.iteration) + &#39;: &#39; + str(improvement[-1]) + &#39; pixels&#39;)  
-        self.iteration += 1 
-
-    self.fit_signal()
-    shape = self.array.shape
-    self.coreg = np.reshape(self.coreg, shape)
-    nd = len(shape)-1
-    self.deformation = np.reshape(self.deformation, shape[:-1]+(nd,)+(shape[-1],))
-    self.iter = pd.DataFrame({&#39;Maximum deformation&#39;: improvement}) 
-
-    print(&#39;Total calculation time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.fit_deformation"><code class="name flex">
-<span>def <span class="ident">fit_deformation</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def fit_deformation(self):
-
-    msg = self.pinned_message + &#39;, fitting deformation field (iteration &#39; + str(self.iteration) + &#39;)&#39;
-    print(msg)
-    if self.status is not None:
-        self.status.message(msg)
-    start = time.time()
-    nt = self._npdt[-1]
-    deformation = np.empty(self._npdt)
-    dict_param = _elastix2dict(self.elastix) # Hack necessary for parallelization
-    # If mask isn&#39;t same shape as images, then don&#39;t use it
-    if isinstance(self.coreg_mask, np.ndarray):
-        if np.shape(self.coreg_mask) != self.array.shape: 
-            mask = None
-        else: 
-            mask = self.coreg_mask
-    else: 
-        mask = None
-    if not self.parallel:
-        for t in tqdm(range(nt), desc=msg): # dynamics
-            if self.status is not None:
-                self.status.progress(t, nt)
-            if mask is not None:
-                mask_t = mask[...,t]
-            else: 
-                mask_t = None
-            args = (self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask_t)
-            self.coreg[:,t], deformation[:,:,t] = _coregister(args)
-    else:
-        pool = multiprocessing.Pool(processes=os.cpu_count())
-        if mask is None:
-            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask) for t in range(nt)] #dynamics
-        else:
-            args = [(self.array[...,t], self.model_fit[...,t], dict_param, self.pixel_spacing, self.log, mask[...,t]) for t in range(nt)] #dynamics
-        results = list(tqdm(pool.imap(_coregister, args), total=nt, desc=msg))
-        for t in range(nt):
-            self.coreg[:,t] = results[t][0]
-            deformation[:,:,t] = results[t][1]
-    print(&#39;Coregistration time: &#39; + str((time.time()-start)/60) +&#39; min&#39;)
-    return deformation</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.fit_signal"><code class="name flex">
-<span>def <span class="ident">fit_signal</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def fit_signal(self):
-
-    msg = self.pinned_message + &#39;, fitting signal model (iteration &#39; + str(self.iteration) + &#39;)&#39;
-    print(msg)
-    if self.status is not None:
-        self.status.message(msg)
-    start = time.time()
-    fit, pars = self.signal_model.main(self.coreg, self.signal_parameters)
-    shape = self.array.shape
-    self.model_fit = np.reshape(fit, shape)
-    self.pars = np.reshape(pars, shape[:-1] + (pars.shape[-1],))
-    print(&#39;Model fitting time: &#39; + str((time.time()-start)/60) + &#39; min&#39;)</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.read_elastix"><code class="name flex">
-<span>def <span class="ident">read_elastix</span></span>(<span>self, file)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def read_elastix(self, file):
-    self.elastix.AddParameterFile(file)</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.set_array"><code class="name flex">
-<span>def <span class="ident">set_array</span></span>(<span>self, array)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def set_array(self, array):
-    self.array = array
-    self.coreg = array
-    n = self._npdt
-    self.coreg = np.reshape(self.coreg, (n[0],n[2]))</code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.set_elastix"><code class="name flex">
-<span>def <span class="ident">set_elastix</span></span>(<span>self, **kwargs)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def set_elastix(self, **kwargs):
-    for tag, value in kwargs.items():
-        self.elastix.SetParameter(tag, str(value))       </code></pre>
-</details>
-</dd>
-<dt id="mdreg.MDReg.set_mask"><code class="name flex">
-<span>def <span class="ident">set_mask</span></span>(<span>self, mask_array)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def set_mask(self, mask_array):
-    self.coreg_mask = mask_array
-    n = self._npdt
-    self.coreg_mask = np.reshape(self.coreg_mask, (n[0],n[2]))</code></pre>
-</details>
-</dd>
-</dl>
-</dd>
-</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -633,7 +179,8 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <li><a href="#description">Description</a><ul>
 <li><a href="#installation">Installation</a></li>
 <li><a href="#example-data">Example data</a></li>
-<li><a href="#how-to-use">How to use</a></li>
+<li><a href="#how-to-run">How to run</a></li>
+<li><a href="#outputs">Outputs</a></li>
 </ul>
 </li>
 <li><a href="#customization">Customization</a></li>
@@ -651,26 +198,6 @@ __all__ = [&#39;MDReg&#39;, &#39;models&#39;]</code></pre>
 <ul>
 <li><code><a title="mdreg.main" href="main.html">mdreg.main</a></code></li>
 <li><code><a title="mdreg.models" href="models/index.html">mdreg.models</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-classes">Classes</a></h3>
-<ul>
-<li>
-<h4><code><a title="mdreg.MDReg" href="#mdreg.MDReg">MDReg</a></code></h4>
-<ul class="two-column">
-<li><code><a title="mdreg.MDReg.export" href="#mdreg.MDReg.export">export</a></code></li>
-<li><code><a title="mdreg.MDReg.export_data" href="#mdreg.MDReg.export_data">export_data</a></code></li>
-<li><code><a title="mdreg.MDReg.export_fit" href="#mdreg.MDReg.export_fit">export_fit</a></code></li>
-<li><code><a title="mdreg.MDReg.export_registered" href="#mdreg.MDReg.export_registered">export_registered</a></code></li>
-<li><code><a title="mdreg.MDReg.fit" href="#mdreg.MDReg.fit">fit</a></code></li>
-<li><code><a title="mdreg.MDReg.fit_deformation" href="#mdreg.MDReg.fit_deformation">fit_deformation</a></code></li>
-<li><code><a title="mdreg.MDReg.fit_signal" href="#mdreg.MDReg.fit_signal">fit_signal</a></code></li>
-<li><code><a title="mdreg.MDReg.read_elastix" href="#mdreg.MDReg.read_elastix">read_elastix</a></code></li>
-<li><code><a title="mdreg.MDReg.set_array" href="#mdreg.MDReg.set_array">set_array</a></code></li>
-<li><code><a title="mdreg.MDReg.set_elastix" href="#mdreg.MDReg.set_elastix">set_elastix</a></code></li>
-<li><code><a title="mdreg.MDReg.set_mask" href="#mdreg.MDReg.set_mask">set_mask</a></code></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
