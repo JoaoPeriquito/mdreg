@@ -33,7 +33,7 @@ class MDReg:
 
         # mdr optimization
         self.max_iterations = 5
-        self.precision = 1.0
+        self.precision = 100.0
 
         # output
         self.coreg = None
@@ -192,8 +192,10 @@ class MDReg:
             #print("Part 1_2 after args before multiprocessing: " + str(psutil.virtual_memory()[3]/1000000000))
             #args = shared_memory.ShareableList(args)
 
-            num_workers = int(len(os.sched_getaffinity(0)))
-            #num_workers = int(2)
+            try: 
+                num_workers = int(len(os.sched_getaffinity(0)))
+            except: 
+                num_workers = int(os.cpu_count())
             
             pool = multiprocessing.Pool(processes=num_workers)
             

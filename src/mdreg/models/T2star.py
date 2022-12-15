@@ -59,7 +59,12 @@ def T2star_fitting(images_to_be_fitted, echo_times):
     fit = np.empty(shape)
 
     # Run T2star_fitting_pixel (which contains "curve_fit") in parallel processing
-    pool = multiprocessing.Pool(processes=int(len(os.sched_getaffinity(0))))
+    try: 
+        num_workers = int(len(os.sched_getaffinity(0)))
+    except: 
+        num_workers = int(os.cpu_count())
+
+    pool = multiprocessing.Pool(processes=num_workers)
     arguments = [(x, images_to_be_fitted, initial_guess, lb, ub, echo_times) for x in range(shape[0])] #pixels (x-dim*y-dim)
     results = pool.map(T2star_fitting_pixel, arguments)
     for i, result in enumerate(results):

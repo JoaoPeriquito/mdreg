@@ -64,8 +64,13 @@ def T1_fitting(images_to_be_fitted, inversion_times):
     shape = np.shape(images_to_be_fitted)
     images_to_be_fitted = np.abs(images_to_be_fitted)
 
+    try: 
+        num_workers = int(len(os.sched_getaffinity(0)))
+    except: 
+        num_workers = int(os.cpu_count())
+
     # Run T1_fitting_pixel (which contains "curve_fit") in parallel processing
-    pool = multiprocessing.Pool(processes=int(len(os.sched_getaffinity(0))))
+    pool = multiprocessing.Pool(processes=num_workers)
     arguments = [(x, images_to_be_fitted, p0, lb, ub, inversion_times) for x in range(shape[0])] #pixels (x-dim*y-dim)
     results = pool.map(T1_fitting_pixel, arguments)
     for i, result in enumerate(results):
@@ -78,6 +83,7 @@ def T1_fitting(images_to_be_fitted, inversion_times):
     pool.join()   
     
     T1_estimated = T1_apparent * (np.divide(b, a, out=np.zeros_like(b), where=a!=0) - 1)
+    T1_estimated[T1_estimated>3000] = 3000
        
     return fit, T1_estimated, T1_apparent, b, a
 
